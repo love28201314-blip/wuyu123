@@ -5,57 +5,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>汴京娘子調養記 - AAA Cinematic Edition</title>
     <style>
-        :root {
-            --primary-gold: #d4af37;
-            --dark-bg: #05070a;
-        }
         body {
             margin: 0;
             padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: var(--dark-bg);
+            background-color: #000;
             font-family: 'Kaiti', '標楷體', 'Times New Roman', serif;
             overflow: hidden; 
             color: #fff;
         }
         #game-container {
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            perspective: 1000px;
         }
         canvas {
-            max-width: 100vw;
-            max-height: 100vh;
-            aspect-ratio: 8 / 9;
-            background-color: #020305;
-            box-shadow: 0 0 80px rgba(0,0,0,1), 0 0 30px rgba(212, 175, 55, 0.1);
-            border: 2px solid rgba(212, 175, 55, 0.3);
-            border-radius: 4px;
-            object-fit: contain;
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
             touch-action: none;
-            /* 模擬一點螢幕的輝光 */
-            filter: drop-shadow(0px 0px 10px rgba(255,255,255,0.05));
         }
-        
-        /* 隱藏原生游標，使用光源 */
-        canvas { cursor: crosshair; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
-    <canvas id="gameCanvas" width="800" height="900"></canvas>
+    <canvas id="gameCanvas"></canvas>
 </div>
 
 <script>
     const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d', { alpha: false }); // 關閉 alpha 提升渲染效能
+    const ctx = canvas.getContext('2d', { alpha: false }); 
+
+    // 自適應滿版系統 (Responsive Fullscreen System)
+    let dpr = window.devicePixelRatio || 1;
+    let cw = window.innerWidth;
+    let ch = window.innerHeight;
+    
+    function resize() {
+        cw = window.innerWidth;
+        ch = window.innerHeight;
+        canvas.width = cw * dpr;
+        canvas.height = ch * dpr;
+    }
+    window.addEventListener('resize', resize);
+    resize();
 
     // 遊戲狀態與變數
     const STATES = { START: 0, STORY: 1, QUESTION: 2, FEEDBACK: 3, END: 4 };
@@ -64,13 +60,13 @@
     let currentStoryLine = 0;
     let selectedOptionFeedback = "";
     
-    // 即時物理與互動變數
-    let mouse = { x: 400, y: 450, targetX: 400, targetY: 450 };
+    // 物理、互動與點擊區域
+    let mouse = { x: cw/2, y: ch/2, targetX: cw/2, targetY: ch/2 };
     let time = 0;
     let dt = 0;
     let lastTime = 0;
+    let clickZones = []; // 儲存當前幀可點擊的按鈕
     
-    // 鏡頭與特效
     let cameraShake = { x: 0, y: 0, amount: 0 };
     let bloomIntensity = 0;
     let dustParticles = [];
@@ -79,7 +75,7 @@
     let player = { 
         knowledgeScore: 50,
         affections: {
-            maid: { name: "丫鬟 春桃", current: 50, target: 50, max: 100, color: "#ff8da1", status: "平淡" },
+            maid: { name: "丫鬟 春桃", current: 50, target: 50, max: 100, color: "#e86f88", status: "平淡" },
             chef: { name: "膳房 總管", current: 50, target: 50, max: 100, color: "#d29c72", status: "平淡" },
             doctor: { name: "太醫 張大人", current: 50, target: 50, max: 100, color: "#6ca07e", status: "平淡" },
             medic: { name: "醫女 蘇氏", current: 50, target: 50, max: 100, color: "#82c0d9", status: "平淡" }
@@ -88,32 +84,21 @@
 
     /**
      * 高階純數算 Live2D 渲染引擎
-     * 完全不需要圖片，透過貝茲曲線與流體運算即時生成 AAA 級動態角色
      */
     class ProceduralLive2DCharacter {
-        constructor() {
-            // 物理節點
-            this.breathingPhase = 0;
-            this.hairPhase = 0;
-            this.blinkTimer = 0;
+        constructor(customColors = null) {
+            this.breathingPhase = Math.random() * Math.PI;
+            this.hairPhase = Math.random() * Math.PI;
+            this.blinkTimer = Math.random() * 3;
             this.eyeOpenness = 1;
             
-            // 情緒參數 (0 ~ 1)
             this.targetEmotion = { smile: 0, browAngle: 0, eyeWide: 0 };
             this.currentEmotion = { smile: 0, browAngle: 0, eyeWide: 0 };
             
-            // 色彩配置 (宋代高雅配色)
-            this.colors = {
-                skinBase: '#fae3d9',
-                skinShadow: '#d9a896',
-                skinHighlight: '#fff1ec',
-                hairDark: '#0a0b10',
-                hairLight: '#2c2f3f',
-                hairHighlight: '#5e6580',
-                silkBase: '#8b1e28',     // 宋代正紅絲綢
-                silkShadow: '#4a0e14',
-                goldTrim: '#d4af37',
-                eyeIris: '#5c4033'
+            this.colors = customColors || {
+                skinBase: '#fae3d9', skinShadow: '#d9a896', skinHighlight: '#fff1ec',
+                hairDark: '#0a0b10', hairLight: '#2c2f3f',
+                silkBase: '#8b1e28', silkShadow: '#4a0e14', goldTrim: '#d4af37'
             };
         }
 
@@ -127,410 +112,243 @@
         }
 
         update(dt) {
-            // 呼吸物理 (正弦波)
             this.breathingPhase += dt * 1.5;
             this.hairPhase += dt * 2.0;
 
-            // 眨眼邏輯
             this.blinkTimer -= dt;
             if (this.blinkTimer <= 0) {
                 this.eyeOpenness -= dt * 15;
                 if (this.eyeOpenness <= 0) {
                     this.eyeOpenness = 0;
-                    this.blinkTimer = Math.random() * 3 + 2; // 2~5秒眨眼一次
+                    this.blinkTimer = Math.random() * 3 + 2; 
                 }
             } else {
                 this.eyeOpenness += dt * 10;
                 if (this.eyeOpenness > 1) this.eyeOpenness = 1;
             }
 
-            // 情緒平滑過渡 (Lerp)
             this.currentEmotion.smile += (this.targetEmotion.smile - this.currentEmotion.smile) * dt * 5;
             this.currentEmotion.browAngle += (this.targetEmotion.browAngle - this.currentEmotion.browAngle) * dt * 5;
             this.currentEmotion.eyeWide += (this.targetEmotion.eyeWide - this.currentEmotion.eyeWide) * dt * 5;
         }
 
-        // 核心渲染函數
-        draw(ctx, cx, cy, scale) {
+        draw(ctx, cx, cy, scale, isMini = false) {
             ctx.save();
             ctx.translate(cx, cy);
             ctx.scale(scale, scale);
 
-            // 計算動態偏移量
             let breathY = Math.sin(this.breathingPhase) * 3;
             let breathScale = 1 + Math.sin(this.breathingPhase) * 0.005;
             let swayX = Math.sin(this.hairPhase) * 5;
             let swayY = Math.cos(this.hairPhase * 0.8) * 3;
 
-            // 視差效果 (根據滑鼠)
-            let lookDx = (mouse.x - cx) * 0.02;
-            let lookDy = (mouse.y - cy) * 0.02;
+            let lookDx = isMini ? 0 : (mouse.x - cx) * 0.02;
+            let lookDy = isMini ? 0 : (mouse.y - cy) * 0.02;
 
-            // 1. 繪製後髮 (Back Hair)
-            this.drawBackHair(ctx, swayX, swayY, lookDx);
+            this.drawBackHair(ctx, swayX, swayY);
 
-            // 身體層 (受呼吸影響)
             ctx.save();
             ctx.translate(lookDx * 0.5, breathY);
             ctx.scale(1, breathScale);
-            this.drawBody(ctx);
+            this.drawBody(ctx, isMini);
             ctx.restore();
 
-            // 頸部與頭部層
             ctx.save();
             ctx.translate(lookDx, lookDy + breathY * 0.5);
+            this.drawFaceBase(ctx, isMini);
             
-            // 臉部底層
-            this.drawFaceBase(ctx);
-            
-            // 五官 (受更強的視差影響)
             ctx.save();
             ctx.translate(lookDx * 0.3, lookDy * 0.3);
             this.drawFeatures(ctx);
             ctx.restore();
 
-            // 前髮/瀏海 (Front Hair - 受流體物理影響最深)
-            this.drawFrontHair(ctx, swayX * 1.5, swayY, lookDx * 1.2);
+            this.drawFrontHair(ctx, swayX * 1.5, swayY);
+            ctx.restore();
 
-            ctx.restore(); // 結束頭部層
-
-            // 繪製頂層高光與環境光影疊加 (Simulating UE5 Subsurface & Rim lighting)
-            this.drawCinematicLighting(ctx, cx, cy, scale);
+            if (!isMini) this.drawCinematicLighting(ctx, cx, cy);
 
             ctx.restore();
         }
 
-        drawBody(ctx) {
-            // 宋代交領衣飾 (絲綢漸層)
+        drawBody(ctx, isMini) {
             let silkGrad = ctx.createLinearGradient(0, 0, 0, 300);
             silkGrad.addColorStop(0, this.colors.silkBase);
             silkGrad.addColorStop(1, this.colors.silkShadow);
 
             ctx.fillStyle = silkGrad;
             ctx.shadowColor = 'rgba(0,0,0,0.5)';
-            ctx.shadowBlur = 20;
+            ctx.shadowBlur = isMini ? 0 : 20;
             ctx.beginPath();
-            ctx.moveTo(-150, 300);
-            ctx.quadraticCurveTo(-100, 80, -30, 80);
-            ctx.lineTo(30, 80);
-            ctx.quadraticCurveTo(100, 80, 150, 300);
-            ctx.fill();
-            ctx.shadowBlur = 0;
+            ctx.moveTo(-150, 300); ctx.quadraticCurveTo(-100, 80, -30, 80); ctx.lineTo(30, 80); ctx.quadraticCurveTo(100, 80, 150, 300);
+            ctx.fill(); ctx.shadowBlur = 0;
 
-            // 衣領細節 (高畫質曲線)
             let collarGrad = ctx.createLinearGradient(-50, 80, 50, 150);
-            collarGrad.addColorStop(0, '#e6e6e6');
-            collarGrad.addColorStop(1, '#b3b3b3');
+            collarGrad.addColorStop(0, '#e6e6e6'); collarGrad.addColorStop(1, '#b3b3b3');
             ctx.fillStyle = collarGrad;
-            ctx.beginPath();
-            ctx.moveTo(-50, 80);
-            ctx.lineTo(0, 140);
-            ctx.lineTo(50, 80);
-            ctx.lineTo(80, 100);
-            ctx.lineTo(0, 200);
-            ctx.lineTo(-80, 100);
-            ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-50, 80); ctx.lineTo(0, 140); ctx.lineTo(50, 80); ctx.lineTo(80, 100); ctx.lineTo(0, 200); ctx.lineTo(-80, 100); ctx.fill();
 
-            // 燙金刺繡邊緣
-            ctx.strokeStyle = this.colors.goldTrim;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(-75, 95); ctx.lineTo(0, 190); ctx.lineTo(75, 95);
-            ctx.stroke();
+            ctx.strokeStyle = this.colors.goldTrim; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(-75, 95); ctx.lineTo(0, 190); ctx.lineTo(75, 95); ctx.stroke();
             
-            // 脖子
             let neckGrad = ctx.createLinearGradient(0, 50, 0, 90);
-            neckGrad.addColorStop(0, this.colors.skinShadow);
-            neckGrad.addColorStop(1, this.colors.skinBase);
+            neckGrad.addColorStop(0, this.colors.skinShadow); neckGrad.addColorStop(1, this.colors.skinBase);
             ctx.fillStyle = neckGrad;
-            ctx.beginPath();
-            ctx.moveTo(-20, 40); ctx.lineTo(20, 40);
-            ctx.lineTo(25, 90); ctx.lineTo(-25, 90);
-            ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-20, 40); ctx.lineTo(20, 40); ctx.lineTo(25, 90); ctx.lineTo(-25, 90); ctx.fill();
         }
 
-        drawFaceBase(ctx) {
-            // 臉部輪廓 (精緻瓜子臉)
+        drawFaceBase(ctx, isMini) {
             let faceGrad = ctx.createRadialGradient(0, -20, 10, 0, 0, 80);
             faceGrad.addColorStop(0, this.colors.skinHighlight);
             faceGrad.addColorStop(0.7, this.colors.skinBase);
             faceGrad.addColorStop(1, this.colors.skinShadow);
 
             ctx.fillStyle = faceGrad;
-            ctx.shadowColor = 'rgba(0,0,0,0.2)';
-            ctx.shadowBlur = 10;
-            ctx.beginPath();
-            ctx.moveTo(0, 60); // 下巴
-            ctx.bezierCurveTo(45, 50, 60, 0, 55, -40); // 右臉頰
-            ctx.bezierCurveTo(50, -80, -50, -80, -55, -40); // 額頭
-            ctx.bezierCurveTo(-60, 0, -45, 50, 0, 60); // 左臉頰
-            ctx.fill();
+            ctx.shadowColor = 'rgba(0,0,0,0.2)'; ctx.shadowBlur = isMini ? 0 : 10;
+            ctx.beginPath(); ctx.moveTo(0, 60); ctx.bezierCurveTo(45, 50, 60, 0, 55, -40); ctx.bezierCurveTo(50, -80, -50, -80, -55, -40); ctx.bezierCurveTo(-60, 0, -45, 50, 0, 60); ctx.fill();
             ctx.shadowBlur = 0;
 
-            // 次表面散射紅暈 (Subsurface Scattering / Blush)
             ctx.globalCompositeOperation = 'multiply';
             let blushGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, 20);
-            blushGrad.addColorStop(0, 'rgba(255, 100, 100, 0.15)');
-            blushGrad.addColorStop(1, 'rgba(255, 100, 100, 0)');
-            
+            blushGrad.addColorStop(0, 'rgba(255, 100, 100, 0.15)'); blushGrad.addColorStop(1, 'rgba(255, 100, 100, 0)');
             ctx.save(); ctx.translate(-35, 10); ctx.fillStyle = blushGrad; ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.fill(); ctx.restore();
             ctx.save(); ctx.translate(35, 10); ctx.fillStyle = blushGrad; ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.fill(); ctx.restore();
             ctx.globalCompositeOperation = 'source-over';
         }
 
         drawFeatures(ctx) {
-            // 眉毛 (隨情緒改變角度)
-            ctx.strokeStyle = '#2a1a10';
-            ctx.lineWidth = 2.5;
-            ctx.lineCap = 'round';
-            let browY = -35;
-            let browA = this.currentEmotion.browAngle * 10;
+            ctx.strokeStyle = '#2a1a10'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+            let browY = -35; let browA = this.currentEmotion.browAngle * 10;
             
-            // 左眉
             ctx.beginPath(); ctx.moveTo(-45, browY - browA); ctx.quadraticCurveTo(-30, browY - 5, -15, browY + browA); ctx.stroke();
-            // 右眉
             ctx.beginPath(); ctx.moveTo(45, browY - browA); ctx.quadraticCurveTo(30, browY - 5, 15, browY + browA); ctx.stroke();
 
-            // 眼睛 (3D 質感)
             let eyeY = -10;
             let eyeScaleY = this.eyeOpenness * this.currentEmotion.eyeWide;
             
             const drawEye = (ex, ey, flip) => {
-                ctx.save();
-                ctx.translate(ex, ey);
-                ctx.scale(flip ? -1 : 1, 1);
-
-                // 眼白
-                ctx.fillStyle = '#fcfcfc';
-                ctx.beginPath();
-                ctx.moveTo(-15, 0);
-                ctx.quadraticCurveTo(0, -10 * eyeScaleY, 15, 0);
-                ctx.quadraticCurveTo(0, 5 * eyeScaleY, -15, 0);
-                ctx.fill();
+                ctx.save(); ctx.translate(ex, ey); ctx.scale(flip ? -1 : 1, 1);
+                ctx.fillStyle = '#fcfcfc'; ctx.beginPath(); ctx.moveTo(-15, 0); ctx.quadraticCurveTo(0, -10 * eyeScaleY, 15, 0); ctx.quadraticCurveTo(0, 5 * eyeScaleY, -15, 0); ctx.fill();
 
                 if (eyeScaleY > 0.1) {
-                    // 裁切遮罩 (確保瞳孔不超出眼眶)
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.moveTo(-15, 0); ctx.quadraticCurveTo(0, -10 * eyeScaleY, 15, 0); ctx.quadraticCurveTo(0, 5 * eyeScaleY, -15, 0);
-                    ctx.clip();
-
-                    // 虹膜 (深邃漸層)
+                    ctx.save(); ctx.beginPath(); ctx.moveTo(-15, 0); ctx.quadraticCurveTo(0, -10 * eyeScaleY, 15, 0); ctx.quadraticCurveTo(0, 5 * eyeScaleY, -15, 0); ctx.clip();
                     let irisGrad = ctx.createRadialGradient(0, 2, 0, 0, 0, 8);
-                    irisGrad.addColorStop(0, '#8c5a35');
-                    irisGrad.addColorStop(1, '#2a1508');
-                    ctx.fillStyle = irisGrad;
-                    ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill();
-
-                    // 瞳孔
-                    ctx.fillStyle = '#0a0502';
-                    ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
-
-                    // 高光 (Anime Catchlights)
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-                    ctx.beginPath(); ctx.arc(-3, -3, 2, 0, Math.PI*2); ctx.fill();
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-                    ctx.beginPath(); ctx.arc(3, 3, 1.5, 0, Math.PI*2); ctx.fill();
-
-                    // 頂部陰影 (眼睫毛遮擋)
-                    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-                    ctx.beginPath(); ctx.arc(0, -8, 10, 0, Math.PI*2); ctx.fill();
-
-                    ctx.restore(); // 結束裁切
+                    irisGrad.addColorStop(0, '#8c5a35'); irisGrad.addColorStop(1, '#2a1508');
+                    ctx.fillStyle = irisGrad; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#0a0502'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; ctx.beginPath(); ctx.arc(-3, -3, 2, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'; ctx.beginPath(); ctx.arc(3, 3, 1.5, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.arc(0, -8, 10, 0, Math.PI*2); ctx.fill();
+                    ctx.restore(); 
                 }
 
-                // 上睫毛 (濃密)
-                ctx.strokeStyle = '#1a0a05';
-                ctx.lineWidth = 3.5;
-                ctx.beginPath();
-                ctx.moveTo(-18, 2);
-                ctx.quadraticCurveTo(0, -12 * eyeScaleY, 18, 2);
-                ctx.stroke();
-                
-                // 眼線細節
+                ctx.strokeStyle = '#1a0a05'; ctx.lineWidth = 3.5;
+                ctx.beginPath(); ctx.moveTo(-18, 2); ctx.quadraticCurveTo(0, -12 * eyeScaleY, 18, 2); ctx.stroke();
                 ctx.lineWidth = 1;
                 ctx.beginPath(); ctx.moveTo(15, 0); ctx.lineTo(20, -5 * eyeScaleY); ctx.stroke();
                 ctx.beginPath(); ctx.moveTo(12, -5); ctx.lineTo(16, -9 * eyeScaleY); ctx.stroke();
-
                 ctx.restore();
             };
 
-            drawEye(-25, eyeY, false);
-            drawEye(25, eyeY, true);
+            drawEye(-25, eyeY, false); drawEye(25, eyeY, true);
 
-            // 鼻子 (極簡高光)
-            ctx.fillStyle = this.colors.skinShadow;
-            ctx.beginPath(); ctx.arc(0, 15, 1.5, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = 'rgba(255,255,255,0.6)';
-            ctx.beginPath(); ctx.arc(0, 10, 2, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = this.colors.skinShadow; ctx.beginPath(); ctx.arc(0, 15, 1.5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(0, 10, 2, 0, Math.PI*2); ctx.fill();
 
-            // 嘴唇 (動態微笑)
-            let mouthY = 35;
-            let smile = this.currentEmotion.smile * 5;
-            
-            // 唇色漸層
+            let mouthY = 35; let smile = this.currentEmotion.smile * 5;
             let lipGrad = ctx.createLinearGradient(0, mouthY-2, 0, mouthY+5);
-            lipGrad.addColorStop(0, '#c75c5c');
-            lipGrad.addColorStop(1, '#a63c3c');
+            lipGrad.addColorStop(0, '#c75c5c'); lipGrad.addColorStop(1, '#a63c3c');
             
-            ctx.fillStyle = lipGrad;
-            ctx.strokeStyle = '#8a2b2b';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(-8, mouthY - smile*0.5);
-            ctx.quadraticCurveTo(0, mouthY + smile, 8, mouthY - smile*0.5);
-            ctx.quadraticCurveTo(0, mouthY + 3 + smile, -8, mouthY - smile*0.5);
+            ctx.fillStyle = lipGrad; ctx.strokeStyle = '#8a2b2b'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(-8, mouthY - smile*0.5); ctx.quadraticCurveTo(0, mouthY + smile, 8, mouthY - smile*0.5); ctx.quadraticCurveTo(0, mouthY + 3 + smile, -8, mouthY - smile*0.5);
             ctx.fill(); ctx.stroke();
-            
-            // 唇部高光
-            ctx.fillStyle = 'rgba(255,255,255,0.5)';
-            ctx.beginPath(); ctx.arc(0, mouthY + 1.5 + smile*0.5, 1, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(0, mouthY + 1.5 + smile*0.5, 1, 0, Math.PI*2); ctx.fill();
         }
 
-        drawBackHair(ctx, swayX, swayY, lookDx) {
+        drawBackHair(ctx, swayX, swayY) {
             let hGrad = ctx.createLinearGradient(0, -100, 0, 300);
-            hGrad.addColorStop(0, this.colors.hairLight);
-            hGrad.addColorStop(0.5, this.colors.hairDark);
-            hGrad.addColorStop(1, '#000000');
-
+            hGrad.addColorStop(0, this.colors.hairLight); hGrad.addColorStop(0.5, this.colors.hairDark); hGrad.addColorStop(1, '#000000');
             ctx.fillStyle = hGrad;
-            ctx.beginPath();
-            // 左側長髮
-            ctx.moveTo(-50, -50);
-            ctx.bezierCurveTo(-100, 50, -120 + swayX, 200, -80 + swayX*1.5, 300 + swayY);
-            ctx.lineTo(80 + swayX*1.5, 300 + swayY);
-            // 右側長髮
-            ctx.bezierCurveTo(120 + swayX, 200, 100, 50, 50, -50);
-            ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-50, -50); ctx.bezierCurveTo(-100, 50, -120 + swayX, 200, -80 + swayX*1.5, 300 + swayY);
+            ctx.lineTo(80 + swayX*1.5, 300 + swayY); ctx.bezierCurveTo(120 + swayX, 200, 100, 50, 50, -50); ctx.fill();
         }
 
-        drawFrontHair(ctx, swayX, swayY, lookDx) {
+        drawFrontHair(ctx, swayX, swayY) {
             ctx.fillStyle = this.colors.hairDark;
-            
-            // 頭頂 (立體感)
-            ctx.beginPath();
-            ctx.arc(0, -50, 62, Math.PI, 0);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(0, -50, 62, Math.PI, 0); ctx.fill();
 
-            // 繪製多層次瀏海 (運用貝茲曲線模擬髮絲)
             const drawStrand = (startX, startY, cp1x, cp1y, cp2x, cp2y, endX, endY, width) => {
-                ctx.beginPath();
-                ctx.moveTo(startX, startY);
-                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, endY);
-                ctx.bezierCurveTo(cp2x + width, cp2y, cp1x + width, cp1y, startX + width, startY);
-                ctx.fill();
+                ctx.beginPath(); ctx.moveTo(startX, startY); ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, endY); ctx.bezierCurveTo(cp2x + width, cp2y, cp1x + width, cp1y, startX + width, startY); ctx.fill();
             };
 
             let hGrad = ctx.createLinearGradient(0, -100, 0, 50);
-            hGrad.addColorStop(0, this.colors.hairLight);
-            hGrad.addColorStop(1, this.colors.hairDark);
+            hGrad.addColorStop(0, this.colors.hairLight); hGrad.addColorStop(1, this.colors.hairDark);
             ctx.fillStyle = hGrad;
 
-            // 左側鬢角
             drawStrand(-55, -20, -70, 20, -75 + swayX, 80, -65 + swayX, 120 + swayY, 15);
-            // 右側鬢角
             drawStrand(40, -20, 55, 20, 60 + swayX, 80, 50 + swayX, 120 + swayY, 15);
-
-            // 中間瀏海
             drawStrand(-20, -60, -30, -20, -25 + swayX*0.2, 0, -10 + swayX*0.5, 10, 20);
             drawStrand(0, -60, 10, -20, 15 + swayX*0.2, 0, 25 + swayX*0.5, -5, 25);
 
-            // 髮絲天使光圈 (Anime Hair Halo)
             ctx.globalCompositeOperation = 'screen';
             let haloGrad = ctx.createLinearGradient(0, -70, 0, -40);
-            haloGrad.addColorStop(0, 'rgba(255,255,255,0)');
-            haloGrad.addColorStop(0.5, 'rgba(150, 160, 200, 0.4)');
-            haloGrad.addColorStop(1, 'rgba(255,255,255,0)');
-            
-            ctx.fillStyle = haloGrad;
-            ctx.beginPath();
-            ctx.ellipse(0, -55, 55, 15, 0, 0, Math.PI*2);
-            ctx.fill();
+            haloGrad.addColorStop(0, 'rgba(255,255,255,0)'); haloGrad.addColorStop(0.5, 'rgba(150, 160, 200, 0.4)'); haloGrad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = haloGrad; ctx.beginPath(); ctx.ellipse(0, -55, 55, 15, 0, 0, Math.PI*2); ctx.fill();
             ctx.globalCompositeOperation = 'source-over';
 
-            // 金步搖 (髮飾 - 物理晃動)
-            ctx.strokeStyle = this.colors.goldTrim;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(-60, -30);
-            ctx.lineTo(-70 + swayX*2, 20 + swayY*2);
-            ctx.stroke();
-            
-            ctx.fillStyle = '#ff4d4d'; // 紅寶石
-            ctx.beginPath();
-            ctx.arc(-70 + swayX*2, 20 + swayY*2, 4, 0, Math.PI*2);
-            ctx.fill();
+            ctx.strokeStyle = this.colors.goldTrim; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(-60, -30); ctx.lineTo(-70 + swayX*2, 20 + swayY*2); ctx.stroke();
+            ctx.fillStyle = '#ff4d4d'; ctx.beginPath(); ctx.arc(-70 + swayX*2, 20 + swayY*2, 4, 0, Math.PI*2); ctx.fill();
         }
 
-        drawCinematicLighting(ctx, cx, cy, scale) {
-            // 計算滑鼠相對於角色的角度與距離，產生動態光斑
-            let dx = mouse.x - cx;
-            let dy = mouse.y - cy;
-            let dist = Math.sqrt(dx*dx + dy*dy);
-            
+        drawCinematicLighting(ctx, cx, cy) {
+            let dx = mouse.x - cx; let dy = mouse.y - cy;
             ctx.globalCompositeOperation = 'screen';
             
-            // 邊緣輪廓光 (Rim Light)
             let rimGrad = ctx.createRadialGradient(dx * 0.5, dy * 0.5, 50, 0, 0, 250);
-            rimGrad.addColorStop(0, 'rgba(212, 175, 55, 0.3)'); // 暖金光
-            rimGrad.addColorStop(0.5, 'rgba(100, 150, 255, 0.1)'); // 冷藍光補色
-            rimGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            
-            ctx.fillStyle = rimGrad;
-            ctx.fillRect(-200, -200, 400, 500);
+            rimGrad.addColorStop(0, 'rgba(212, 175, 55, 0.3)'); rimGrad.addColorStop(0.5, 'rgba(100, 150, 255, 0.1)'); rimGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = rimGrad; ctx.fillRect(-200, -200, 400, 500);
 
-            // 核心高光點 (跟隨滑鼠)
             let specGrad = ctx.createRadialGradient(dx*0.1, dy*0.1, 0, dx*0.1, dy*0.1, 80);
-            specGrad.addColorStop(0, 'rgba(255, 255, 255, 0.15)');
-            specGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-            ctx.fillStyle = specGrad;
-            ctx.fillRect(-200, -200, 400, 500);
-
+            specGrad.addColorStop(0, 'rgba(255, 255, 255, 0.15)'); specGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = specGrad; ctx.fillRect(-200, -200, 400, 500);
             ctx.globalCompositeOperation = 'source-over';
         }
     }
 
-    // 實例化 AAA 角色
+    // 實例化角色 (主母與四位NPC)
     const mainCharacter = new ProceduralLive2DCharacter();
+    const npcs = {
+        maid: new ProceduralLive2DCharacter({ skinBase: '#fae3d9', skinShadow: '#d9a896', skinHighlight: '#fff1ec', hairDark: '#1a1012', hairLight: '#3f2c30', silkBase: '#b04a5b', silkShadow: '#5c1b26', goldTrim: '#f5c6c6' }),
+        chef: new ProceduralLive2DCharacter({ skinBase: '#f0d0b5', skinShadow: '#bd967c', skinHighlight: '#ffefe0', hairDark: '#241a12', hairLight: '#4a3728', silkBase: '#8c5b36', silkShadow: '#4a2c16', goldTrim: '#e6c8b1' }),
+        doctor: new ProceduralLive2DCharacter({ skinBase: '#fae3d9', skinShadow: '#d9a896', skinHighlight: '#fff1ec', hairDark: '#121a15', hairLight: '#2c3f35', silkBase: '#4a6d5d', silkShadow: '#1a3326', goldTrim: '#b1e6c8' }),
+        medic: new ProceduralLive2DCharacter({ skinBase: '#fae3d9', skinShadow: '#d9a896', skinHighlight: '#fff1ec', hairDark: '#10181c', hairLight: '#2b3a42', silkBase: '#5a8b9e', silkShadow: '#264a5c', goldTrim: '#b1d8e6' })
+    };
 
-    // ==========================================
-    // 環境粒子系統 (Cinematic Dust Motes)
-    // ==========================================
+    // 環境粒子系統
     class DustParticle {
         constructor() {
-            this.x = Math.random() * canvas.width;
-            this.y = Math.random() * canvas.height;
+            this.x = Math.random() * cw; this.y = Math.random() * ch;
             this.size = Math.random() * 2 + 0.5;
-            this.vx = (Math.random() - 0.5) * 0.5;
-            this.vy = (Math.random() - 0.5) * 0.5 - 0.2;
+            this.vx = (Math.random() - 0.5) * 0.5; this.vy = (Math.random() - 0.5) * 0.5 - 0.2;
             this.life = Math.random() * Math.PI * 2;
         }
         update(dt) {
-            this.x += this.vx + Math.sin(time + this.life) * 0.5;
-            this.y += this.vy;
-            this.life += dt;
-            if (this.y < 0) this.y = canvas.height;
-            if (this.x < 0) this.x = canvas.width;
-            if (this.x > canvas.width) this.x = 0;
+            this.x += this.vx + Math.sin(time + this.life) * 0.5; this.y += this.vy; this.life += dt;
+            if (this.y < 0) this.y = ch; if (this.x < 0) this.x = cw; if (this.x > cw) this.x = 0;
         }
         draw(ctx) {
-            let alpha = (Math.sin(this.life * 2) + 1) * 0.3; // 閃爍
+            let alpha = (Math.sin(this.life * 2) + 1) * 0.3;
             ctx.fillStyle = `rgba(255, 220, 150, ${alpha})`;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
         }
     }
-
     for(let i=0; i<50; i++) dustParticles.push(new DustParticle());
 
+    // 關卡內容
     const originStages = {
         '名門嫡女': {
             character: "太醫 張大人",
-            story: [
-                "老夫人派人送來了極其珍貴的『千年人參湯』，指名要給我補身子。",
-                "「夫人！這千年人參雖是大補，但對產婦而言，卻是退奶的大忌啊！」\n【調養小記】：人參、韭菜、麥芽水等都是常見的退奶食物，哺乳期應避開。"
-            ],
+            story: ["老夫人派人送來了極其珍貴的『千年人參湯』，指名要給我補身子。","「夫人！這千年人參雖是大補，但對產婦而言，卻是退奶的大忌啊！」\n【調養小記】：人參、韭菜、麥芽水等都是常見的退奶食物，哺乳期應避開。"],
             question: "【嫡女專屬支線】面對賞賜與太醫的勸告，您該如何應對？",
             options: [
                 { text: "婉拒並請太醫作證會退奶，改請賜黑豆豬腳湯。", feedback: "【太醫 撫鬚】夫人睿智！既保全了顏面，又守住了小少爺的糧倉。", val: 30, expr: 'happy', affects: [{char: 'doctor', val: 30, status: '欣慰'}] },
@@ -542,11 +360,7 @@
 
     const introStage = {   
         character: "醫女 蘇氏",
-        story: [
-            "【大宋汴京 · 侯府】\n昨日歷經千辛萬苦，終於平安誕下了府裡的嫡出小少爺。",
-            "「初為人母，事事皆新。我定要好好學習調養與育兒技巧，保重鳳體。」",
-            "「夫人，現在為您進行產後『早期肌膚接觸』。這能刺激荷爾蒙分泌。」\n【調養小記】：母乳含天然抗體與生長因子，能為寶寶建立強大腸道免疫系統。"
-        ],
+        story: ["【大宋汴京 · 侯府】\n昨日歷經千辛萬苦，終於平安誕下了府裡的嫡出小少爺。","「初為人母，事事皆新。我定要好好學習調養與育兒技巧，保重鳳體。」","「夫人，現在為您進行產後『早期肌膚接觸』。這能刺激荷爾蒙分泌。」\n【調養小記】：母乳含天然抗體與生長因子，能建立強大腸道免疫系統。"],
         question: "【起始抉擇】望著懷中柔嫩的孩兒，您決定如何開啟這趟旅程？",
         options: [
             { text: "學習現代科學親餵法，與下人們攜手配合。", feedback: "【蘇醫女 欣慰】夫人做得極好！皮膚貼皮膚，激發本能！", val: 25, expr: 'happy', affects: [{char: 'medic', val: 25, status: '崇敬'}] },
@@ -556,17 +370,14 @@
     };
 
     let floatingTexts = [];
-
     class FloatingText {
         constructor(x, y, text, color) {
             this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.scale = 0.5;
         }
         update() { this.y -= 1.2; this.life -= 0.015; this.scale += (1 - this.scale) * 0.2; }
         draw(ctx) {
-            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
-            ctx.translate(this.x, this.y); ctx.scale(this.scale, this.scale);
-            ctx.fillStyle = this.color; ctx.font = 'bold 30px "Kaiti", serif';
-            ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; 
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y); ctx.scale(this.scale, this.scale);
+            ctx.fillStyle = this.color; ctx.font = 'bold 28px "Kaiti", serif'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; 
             ctx.textAlign = 'center'; ctx.fillText(this.text, 0, 0); ctx.restore();
         }
     }
@@ -576,112 +387,84 @@
         mainCharacter.setEmotion(opt.expr);
         selectedOptionFeedback = opt.feedback;
         
-        let offsetY = 250;
-        let hasPositive = false;
-        let hasNegative = false;
+        let offsetY = ch/2 - 100;
+        let hasPositive = false; let hasNegative = false;
 
-        // 好感度處理與浮動文字
         if (opt.affects) {
             opt.affects.forEach((r) => {
                 let targetChar = player.affections[r.char];
                 if (targetChar) {
-                    targetChar.target = Math.max(0, Math.min(targetChar.max, targetChar.target + r.val)); 
-                    targetChar.status = r.status;
-                    
+                    targetChar.target = Math.max(0, Math.min(targetChar.max, targetChar.target + r.val)); targetChar.status = r.status;
                     let color = r.val >= 0 ? targetChar.color : "#e74c3c";
-                    let sign = r.val >= 0 ? "+" : "";
-                    floatingTexts.push(new FloatingText(400, offsetY, `${targetChar.name} ${sign}${r.val}`, color));
+                    floatingTexts.push(new FloatingText(cw/2, offsetY, `${targetChar.name} ${r.val>=0?'+':''}${r.val}`, color));
                     offsetY -= 40;
-
-                    if(r.val > 0) hasPositive = true;
-                    else hasNegative = true;
+                    if(r.val > 0) hasPositive = true; else hasNegative = true;
                 }
             });
         }
         
-        // 知識分數浮動文字
         let kColor = opt.val > 0 ? '#4caf50' : '#e74c3c';
-        floatingTexts.push(new FloatingText(400, offsetY, `${opt.val > 0 ? '+' : ''}${opt.val} 調養知識`, kColor));
+        floatingTexts.push(new FloatingText(cw/2, offsetY, `${opt.val > 0 ? '+' : ''}${opt.val} 調養知識`, kColor));
         
-        // 特效與相機震動
         if (opt.val > 0 || hasPositive) bloomIntensity = 1.0; 
         if (opt.val < 0 || hasNegative) cameraShake.amount = 10;
         
         currentState = STATES.FEEDBACK;
     }
 
+    // UI 繪製輔助
     function drawGlassPanel(ctx, x, y, w, h) {
         ctx.save();
-        // 玻璃底色
-        ctx.fillStyle = 'rgba(10, 12, 18, 0.75)';
-        ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
-        
-        // 內發光與邊框
-        ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.beginPath(); ctx.roundRect(x+2, y+2, w-4, h-4, 6); ctx.stroke();
-        
+        ctx.fillStyle = 'rgba(10, 12, 18, 0.75)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+        ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'; ctx.beginPath(); ctx.roundRect(x+2, y+2, w-4, h-4, 6); ctx.stroke();
         ctx.restore();
     }
 
     function drawCinematicText(ctx, text, x, y, maxWidth, isTitle = false) {
-        ctx.shadowColor = 'rgba(0,0,0,0.8)';
-        ctx.shadowBlur = 4;
-        ctx.fillStyle = isTitle ? '#d4af37' : '#e0e0e0';
-        ctx.font = isTitle ? 'bold 24px Kaiti' : '20px Kaiti';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
+        ctx.fillStyle = isTitle ? '#d4af37' : '#e0e0e0'; ctx.font = isTitle ? 'bold 24px Kaiti' : '20px Kaiti';
         
-        let words = text.split('');
-        let line = '';
-        let startY = y;
-        let lineHeight = isTitle ? 34 : 28;
+        let chars = text.split('');
+        let line = ''; let startY = y; let lineHeight = isTitle ? 34 : 28;
 
-        for (let n = 0; n < words.length; n++) {
-            let testLine = line + (words[n] === '\n' ? '' : words[n]);
-            if ((ctx.measureText(testLine).width > maxWidth && n > 0) || words[n] === '\n') {
+        for (let n = 0; n < chars.length; n++) {
+            let char = chars[n];
+            if (char === '\n') {
                 ctx.fillText(line, x, startY);
-                line = words[n] === '\n' ? '' : words[n];
-                startY += lineHeight;
-            } else {
-                line = testLine;
+                line = ''; startY += lineHeight;
+                continue;
             }
+            let testLine = line + char;
+            if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+                ctx.fillText(line, x, startY); line = char; startY += lineHeight;
+            } else { line = testLine; }
         }
-        ctx.fillText(line, x, startY);
+        if(line) ctx.fillText(line, x, startY);
         ctx.shadowBlur = 0;
     }
 
     function drawDatePanel(ctx) {
-        drawGlassPanel(ctx, 20, 20, 250, 95);
+        drawGlassPanel(ctx, 20, 20, 220, 85);
         ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
-        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 20px Kaiti'; ctx.textAlign = 'left';
-        ctx.fillText(`【大宋 宣和元年】`, 35, 55);
-        ctx.fillStyle = '#e0e0e0'; ctx.font = '18px Kaiti';
-        ctx.fillText(`產後第 ${currentDay} 天`, 45, 85);
+        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 20px Kaiti'; ctx.textAlign = 'left'; ctx.fillText(`【大宋 宣和元年】`, 30, 50);
+        ctx.fillStyle = '#e0e0e0'; ctx.font = '18px Kaiti'; ctx.fillText(`產後第 ${currentDay} 天`, 40, 80);
         ctx.shadowBlur = 0;
     }
 
     function drawStatsPanel(ctx) {
-        let panelX = 530;
-        let panelY = 20;
-        let panelW = 250;
-        let panelH = 240;
+        let panelW = 260; let panelX = Math.max(20, cw - panelW - 20);
+        let panelY = 20; let panelH = 240;
         
         drawGlassPanel(ctx, panelX, panelY, panelW, panelH);
         
-        ctx.shadowColor = 'rgba(0,0,0,0.8)';
-        ctx.shadowBlur = 4;
-        ctx.fillStyle = '#d4af37';
-        ctx.font = 'bold 20px Kaiti';
-        ctx.textAlign = 'left';
-        ctx.fillText("【後宅人際關係】", panelX + 15, panelY + 35);
-        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
+        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 18px Kaiti'; ctx.textAlign = 'left';
+        ctx.fillText("【後宅人際關係】", panelX + 15, panelY + 30); ctx.shadowBlur = 0;
 
-        let startY = panelY + 70;
+        let startY = panelY + 65;
         for (const key in player.affections) {
             let stat = player.affections[key];
-            // 平滑動畫
             stat.current += (stat.target - stat.current) * 10 * dt;
             
             let statusColor = '#e0e0e0';
@@ -689,257 +472,204 @@
             else if(['嫌隙', '心寒', '厭惡', '覺得荒唐', '心灰意冷', '瑟瑟發抖', '氣急敗壞', '慌張', '恐懼', '強烈厭惡', '疑惑', '擔憂'].includes(stat.status)) statusColor = '#e74c3c';
             else if(['崇拜', '崇敬', '死心塌地', '情同姐妹', '醫者父母心', '敬畏', '知音', '安心', '欣慰', '敬佩'].includes(stat.status)) statusColor = '#4caf50';
 
-            ctx.fillStyle = '#fff';
-            ctx.font = '16px Kaiti';
-            ctx.textAlign = 'left';
-            ctx.fillText(`${stat.name}`, panelX + 20, startY);
+            // 繪製 NPC 大頭貼
+            let npc = npcs[key];
+            if (npc) {
+                let imgExpr = (statusColor === '#e74c3c') ? 'angry' : ((statusColor === '#4caf50') ? 'happy' : 'normal');
+                npc.setEmotion(imgExpr);
+                ctx.save();
+                ctx.beginPath(); ctx.arc(panelX + 35, startY - 5, 18, 0, Math.PI * 2); ctx.clip();
+                ctx.fillStyle = '#121826'; ctx.fill();
+                // 畫縮小的 Live2D 角色 (isMini = true 來最佳化效能)
+                npc.draw(ctx, panelX + 35, startY + 15, 0.2, true);
+                ctx.restore();
+                
+                ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(panelX + 35, startY - 5, 18, 0, Math.PI*2); ctx.stroke();
+            }
+
+            ctx.fillStyle = '#fff'; ctx.font = '15px Kaiti'; ctx.textAlign = 'left'; ctx.fillText(`${stat.name}`, panelX + 65, startY - 8);
+            ctx.fillStyle = statusColor; ctx.textAlign = 'right'; ctx.fillText(`[${stat.status}]`, panelX + panelW - 20, startY - 8);
             
-            ctx.fillStyle = statusColor;
-            ctx.textAlign = 'right';
-            ctx.fillText(`[${stat.status}]`, panelX + panelW - 20, startY);
-            
-            // 畫進度條底框
-            ctx.fillStyle = 'rgba(255,255,255,0.1)';
-            ctx.beginPath(); ctx.roundRect(panelX + 20, startY + 10, panelW - 40, 6, 3); ctx.fill();
-            
-            // 畫進度條
+            ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.roundRect(panelX + 65, startY + 3, panelW - 85, 6, 3); ctx.fill();
             ctx.fillStyle = stat.color; 
-            let barWidth = Math.max(0, (stat.current / stat.max) * (panelW - 40));
-            ctx.beginPath(); ctx.roundRect(panelX + 20, startY + 10, barWidth, 6, 3); ctx.fill(); 
-            
-            // 光暈
-            ctx.shadowColor = stat.color;
-            ctx.shadowBlur = 10;
-            ctx.beginPath(); ctx.roundRect(panelX + 20, startY + 10, barWidth, 6, 3); ctx.fill(); 
-            ctx.shadowBlur = 0;
+            let barWidth = Math.max(0, (stat.current / stat.max) * (panelW - 85));
+            ctx.beginPath(); ctx.roundRect(panelX + 65, startY + 3, barWidth, 6, 3); ctx.fill(); 
+            ctx.shadowColor = stat.color; ctx.shadowBlur = 8; ctx.beginPath(); ctx.roundRect(panelX + 65, startY + 3, barWidth, 6, 3); ctx.fill(); ctx.shadowBlur = 0;
 
             startY += 45;
         }
     }
 
-    function isHovered(btn) {
-        return mouse.x >= btn.x && mouse.x <= btn.x + btn.w && mouse.y >= btn.y && mouse.y <= btn.y + btn.h;
-    }
-
-    function drawButton(ctx, btn, text) {
-        let hover = isHovered(btn);
+    function drawButton(ctx, id, btn, text) {
+        let hover = (mouse.x >= btn.x && mouse.x <= btn.x + btn.w && mouse.y >= btn.y && mouse.y <= btn.y + btn.h);
         ctx.save();
-        
-        // 按鈕漸層背景
         let bgGrad = ctx.createLinearGradient(0, btn.y, 0, btn.y + btn.h);
         if (hover) {
-            bgGrad.addColorStop(0, 'rgba(212, 175, 55, 0.3)');
-            bgGrad.addColorStop(1, 'rgba(150, 110, 20, 0.1)');
-            ctx.shadowColor = 'rgba(212, 175, 55, 0.5)';
-            ctx.shadowBlur = 15;
-            canvas.style.cursor = 'pointer';
+            bgGrad.addColorStop(0, 'rgba(212, 175, 55, 0.3)'); bgGrad.addColorStop(1, 'rgba(150, 110, 20, 0.1)');
+            ctx.shadowColor = 'rgba(212, 175, 55, 0.5)'; ctx.shadowBlur = 15; canvas.style.cursor = 'pointer';
         } else {
-            bgGrad.addColorStop(0, 'rgba(30, 35, 45, 0.8)');
-            bgGrad.addColorStop(1, 'rgba(15, 18, 25, 0.8)');
+            bgGrad.addColorStop(0, 'rgba(30, 35, 45, 0.8)'); bgGrad.addColorStop(1, 'rgba(15, 18, 25, 0.8)');
         }
+        ctx.fillStyle = bgGrad; ctx.beginPath(); ctx.roundRect(btn.x, btn.y, btn.w, btn.h, 6); ctx.fill();
+        ctx.strokeStyle = hover ? '#fff' : '#d4af37'; ctx.lineWidth = hover ? 2 : 1; ctx.stroke();
+        ctx.fillStyle = hover ? '#fff' : '#d4af37'; ctx.font = '20px Kaiti'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, btn.x + btn.w/2, btn.y + btn.h/2); ctx.restore();
         
-        ctx.fillStyle = bgGrad;
-        ctx.beginPath(); ctx.roundRect(btn.x, btn.y, btn.w, btn.h, 6); ctx.fill();
-        
-        // 邊框
-        ctx.strokeStyle = hover ? '#fff' : '#d4af37';
-        ctx.lineWidth = hover ? 2 : 1;
-        ctx.stroke();
-        
-        // 文字
-        ctx.fillStyle = hover ? '#fff' : '#d4af37';
-        ctx.font = '20px Kaiti';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(text, btn.x + btn.w/2, btn.y + btn.h/2);
-        
-        ctx.restore();
+        clickZones.push({ id: id, ...btn });
     }
 
+    // 核心動畫迴圈
     function gameLoop(timestamp) {
         dt = (timestamp - lastTime) / 1000 || 0;
-        lastTime = timestamp;
-        time += dt;
+        lastTime = timestamp; time += dt;
 
-        // 平滑滑鼠追蹤
-        mouse.x += (mouse.targetX - mouse.x) * 10 * dt;
-        mouse.y += (mouse.targetY - mouse.y) * 10 * dt;
-
-        // 攝影機震動
+        mouse.x += (mouse.targetX - mouse.x) * 10 * dt; mouse.y += (mouse.targetY - mouse.y) * 10 * dt;
         if (cameraShake.amount > 0.1) {
-            cameraShake.x = (Math.random() - 0.5) * cameraShake.amount;
-            cameraShake.y = (Math.random() - 0.5) * cameraShake.amount;
+            cameraShake.x = (Math.random() - 0.5) * cameraShake.amount; cameraShake.y = (Math.random() - 0.5) * cameraShake.amount;
             cameraShake.amount *= 0.9;
-        } else {
-            cameraShake.x = 0; cameraShake.y = 0;
-        }
+        } else { cameraShake.x = 0; cameraShake.y = 0; }
 
         ctx.save();
+        ctx.scale(dpr, dpr); // 支援 Retina 視網膜高畫質
         ctx.translate(cameraShake.x, cameraShake.y);
 
-        // 1. 繪製深度背景 (Cinematic Void)
-        let bgGrad = ctx.createRadialGradient(400, 450, 100, 400, 450, 800);
-        bgGrad.addColorStop(0, '#121826'); // 深邃藍
-        bgGrad.addColorStop(1, '#020305'); // 極黑
-        ctx.fillStyle = bgGrad;
-        ctx.fillRect(0, 0, 800, 900);
+        // 1. 滿版背景
+        let bgGrad = ctx.createRadialGradient(cw/2, ch/2, 100, cw/2, ch/2, Math.max(cw, ch));
+        bgGrad.addColorStop(0, '#121826'); bgGrad.addColorStop(1, '#020305');
+        ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, cw, ch);
 
-        // 2. 背景粒子
         ctx.globalCompositeOperation = 'screen';
         dustParticles.forEach(p => { p.update(dt); p.draw(ctx); });
         ctx.globalCompositeOperation = 'source-over';
 
-        // 更新與渲染 AAA 角色
+        // 2. 更新並繪製所有人物
         mainCharacter.update(dt);
-        // 將角色畫在畫面正中央偏上，放大 1.8 倍
-        mainCharacter.draw(ctx, 400, 450, 1.8);
-
-        // 3. UI 層渲染
-        canvas.style.cursor = 'crosshair'; // 預設游標
+        Object.values(npcs).forEach(npc => npc.update(dt));
         
+        let charScale = Math.min(cw/800, ch/900) * 1.8;
+        if (charScale < 1) charScale = 1;
+        mainCharacter.draw(ctx, cw/2, ch/2 + 50, charScale);
+
+        // 3. UI 響應式渲染
+        clickZones = [];
+        canvas.style.cursor = 'crosshair'; 
+        
+        let boxW = Math.min(700, cw - 40);
+        let boxX = cw / 2 - boxW / 2;
+
         if (currentState === STATES.START) {
-            ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0,0,800,900);
-            ctx.textAlign = 'center';
-            ctx.shadowColor = '#d4af37'; ctx.shadowBlur = 20;
-            ctx.fillStyle = '#fff'; ctx.font = 'bold 50px Kaiti';
-            ctx.fillText("汴京娘子調養記", 400, 250);
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = '#d4af37'; ctx.font = '22px Kaiti';
-            ctx.fillText("— Unreal 級高階流體物理展示版 —", 400, 300);
+            ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0,0,cw,ch);
+            ctx.textAlign = 'center'; ctx.shadowColor = '#d4af37'; ctx.shadowBlur = 20;
+            ctx.fillStyle = '#fff'; 
+            let titleSize = Math.max(30, Math.min(60, cw * 0.08));
+            ctx.font = `bold ${titleSize}px Kaiti`; ctx.fillText("汴京娘子調養記", cw/2, ch/2 - 100); ctx.shadowBlur = 0;
+            ctx.fillStyle = '#d4af37'; ctx.font = `${titleSize*0.45}px Kaiti`; ctx.fillText("— Unreal 級高階流體物理展示版 —", cw/2, ch/2 - 40);
             
-            drawButton(ctx, {x: 300, y: 600, w: 200, h: 60}, "進入侯府");
+            drawButton(ctx, 'btn_start', {x: cw/2 - 100, y: ch/2 + 80, w: 200, h: 60}, "進入侯府");
         }
         else if (currentState === STATES.STORY) {
-            drawDatePanel(ctx);
-            drawStatsPanel(ctx);
-
-            let stage = currentStage || introStage;
-            let text = stage.story[currentStoryLine];
+            drawDatePanel(ctx); drawStatsPanel(ctx);
+            let stage = currentStage || introStage; let text = stage.story[currentStoryLine];
             
-            drawGlassPanel(ctx, 50, 650, 700, 200);
-            drawCinematicText(ctx, `【${stage.character}】`, 80, 690, 640, true);
-            drawCinematicText(ctx, text, 80, 730, 640);
+            let boxY = ch - 240;
+            drawGlassPanel(ctx, boxX, boxY, boxW, 220);
+            drawCinematicText(ctx, `【${stage.character}】`, boxX + 25, boxY + 40, boxW - 50, true);
+            drawCinematicText(ctx, text, boxX + 25, boxY + 80, boxW - 50);
             
-            // 閃爍提示
             ctx.globalAlpha = (Math.sin(time * 5) + 1) * 0.5;
-            ctx.fillStyle = '#d4af37'; ctx.textAlign = 'right'; ctx.font = '16px Kaiti';
-            ctx.fillText("▼ 點擊繼續", 720, 830);
+            ctx.fillStyle = '#d4af37'; ctx.textAlign = 'right'; ctx.font = '16px Kaiti'; ctx.fillText("▼ 點擊繼續", boxX + boxW - 20, boxY + 195);
             ctx.globalAlpha = 1.0;
+            clickZones.push({ id: 'screen_next', x: 0, y: 0, w: cw, h: ch }); // 全畫面可點擊下一句
         }
         else if (currentState === STATES.QUESTION) {
-            drawDatePanel(ctx);
-            drawStatsPanel(ctx);
-
+            drawDatePanel(ctx); drawStatsPanel(ctx);
             let stage = currentStage || introStage;
+            let boxY = ch - 380;
+            drawGlassPanel(ctx, boxX, boxY, boxW, 110);
+            drawCinematicText(ctx, stage.question, boxX + 25, boxY + 45, boxW - 50, true);
             
-            drawGlassPanel(ctx, 50, 500, 700, 120);
-            drawCinematicText(ctx, stage.question, 80, 550, 640, true);
-            
+            let btnW = Math.min(600, cw - 60); let btnX = cw / 2 - btnW / 2;
             stage.options.forEach((opt, idx) => {
-                drawButton(ctx, {x: 100, y: 640 + idx*75, w: 600, h: 60}, opt.text);
+                drawButton(ctx, `opt_${idx}`, {x: btnX, y: boxY + 130 + idx*75, w: btnW, h: 60}, opt.text);
             });
         }
         else if (currentState === STATES.FEEDBACK) {
-            drawDatePanel(ctx);
-            drawStatsPanel(ctx);
-
-            drawGlassPanel(ctx, 50, 650, 700, 200);
-            drawCinematicText(ctx, "【調理結果】", 80, 690, 640, true);
-            drawCinematicText(ctx, selectedOptionFeedback, 80, 730, 640);
+            drawDatePanel(ctx); drawStatsPanel(ctx);
+            let boxY = ch - 240;
+            drawGlassPanel(ctx, boxX, boxY, boxW, 220);
+            drawCinematicText(ctx, "【調理結果】", boxX + 25, boxY + 40, boxW - 50, true);
+            drawCinematicText(ctx, selectedOptionFeedback, boxX + 25, boxY + 80, boxW - 50);
             
             ctx.globalAlpha = (Math.sin(time * 5) + 1) * 0.5;
-            ctx.fillStyle = '#d4af37'; ctx.textAlign = 'right'; ctx.font = '16px Kaiti';
-            ctx.fillText("▼ 點擊繼續", 720, 830);
+            ctx.fillStyle = '#d4af37'; ctx.textAlign = 'right'; ctx.font = '16px Kaiti'; ctx.fillText("▼ 點擊繼續", boxX + boxW - 20, boxY + 195);
             ctx.globalAlpha = 1.0;
+            clickZones.push({ id: 'screen_next', x: 0, y: 0, w: cw, h: ch });
         }
         else if (currentState === STATES.END) {
-            ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,800,900);
-            ctx.textAlign = 'center';
-            ctx.fillStyle = '#d4af37'; ctx.font = 'bold 40px Kaiti';
-            ctx.fillText("體驗結束", 400, 350);
-            ctx.fillStyle = '#fff'; ctx.font = '20px Kaiti';
-            ctx.fillText(`最終知識分數: ${player.knowledgeScore}`, 400, 420);
-            
-            drawButton(ctx, {x: 300, y: 600, w: 200, h: 60}, "重新體驗");
+            ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,cw,ch);
+            ctx.textAlign = 'center'; ctx.fillStyle = '#d4af37'; ctx.font = 'bold 40px Kaiti'; ctx.fillText("體驗結束", cw/2, ch/2 - 100);
+            ctx.fillStyle = '#fff'; ctx.font = '20px Kaiti'; ctx.fillText(`最終知識分數: ${player.knowledgeScore}`, cw/2, ch/2 - 40);
+            drawButton(ctx, 'btn_restart', {x: cw/2 - 100, y: ch/2 + 50, w: 200, h: 60}, "重新體驗");
         }
 
-        // 浮動文字特效
-        floatingTexts = floatingTexts.filter(t => t.life > 0);
-        floatingTexts.forEach(t => { t.update(); t.draw(ctx); });
+        floatingTexts = floatingTexts.filter(t => t.life > 0); floatingTexts.forEach(t => { t.update(); t.draw(ctx); });
 
-        // 全螢幕 Bloom (發光) 特效
         if (bloomIntensity > 0) {
-            ctx.globalCompositeOperation = 'screen';
-            ctx.fillStyle = `rgba(255, 255, 255, ${bloomIntensity * 0.3})`;
-            ctx.fillRect(0, 0, 800, 900);
-            bloomIntensity -= dt * 2;
-            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = `rgba(255, 255, 255, ${bloomIntensity * 0.3})`;
+            ctx.fillRect(0, 0, cw, ch); bloomIntensity -= dt * 2; ctx.globalCompositeOperation = 'source-over';
         }
 
         ctx.restore();
         requestAnimationFrame(gameLoop);
     }
 
-    canvas.addEventListener('mousemove', e => {
-        const rect = canvas.getBoundingClientRect();
-        mouse.targetX = (e.clientX - rect.left) * (canvas.width / rect.width);
-        mouse.targetY = (e.clientY - rect.top) * (canvas.height / rect.height);
-    });
+    // 互動處理
+    function handleInteraction(cx, cy) {
+        let clicked = clickZones.find(z => cx >= z.x && cx <= z.x + z.w && cy >= z.y && cy <= z.y + z.h);
+        
+        if (currentState === STATES.START && clicked && clicked.id === 'btn_start') {
+            currentStage = introStage; mainCharacter.setEmotion('normal'); currentState = STATES.STORY;
+        }
+        else if (currentState === STATES.STORY && clicked && clicked.id === 'screen_next') {
+            currentStoryLine++;
+            if (currentStoryLine >= currentStage.story.length) currentState = STATES.QUESTION;
+        }
+        else if (currentState === STATES.QUESTION && clicked && clicked.id.startsWith('opt_')) {
+            let idx = parseInt(clicked.id.split('_')[1]);
+            applyChoice(currentStage.options[idx]);
+        }
+        else if (currentState === STATES.FEEDBACK && clicked && clicked.id === 'screen_next') {
+            currentDay++; currentStoryLine = 0;
+            if (currentDay > 2) { 
+                currentState = STATES.END; mainCharacter.setEmotion('happy');
+            } else {
+                currentStage = originStages['名門嫡女']; mainCharacter.setEmotion('normal'); currentState = STATES.STORY;
+            }
+        }
+        else if (currentState === STATES.END && clicked && clicked.id === 'btn_restart') {
+            currentDay = 1; player.knowledgeScore = 50;
+            for(let key in player.affections) {
+                player.affections[key].target = 50; player.affections[key].current = 50; player.affections[key].status = "平淡";
+            }
+            currentStage = introStage; currentStoryLine = 0; mainCharacter.setEmotion('normal'); currentState = STATES.STORY;
+        }
+    }
 
     canvas.addEventListener('mousedown', e => {
-        if (currentState === STATES.START) {
-            if (isHovered({x: 300, y: 600, w: 200, h: 60})) {
-                currentStage = introStage;
-                mainCharacter.setEmotion('normal');
-                currentState = STATES.STORY;
-            }
-        }
-        else if (currentState === STATES.STORY) {
-            currentStoryLine++;
-            if (currentStoryLine >= currentStage.story.length) {
-                currentState = STATES.QUESTION;
-            }
-        }
-        else if (currentState === STATES.QUESTION) {
-            currentStage.options.forEach((opt, idx) => {
-                if (isHovered({x: 100, y: 640 + idx*75, w: 600, h: 60})) {
-                    applyChoice(opt);
-                }
-            });
-        }
-        else if (currentState === STATES.FEEDBACK) {
-            currentDay++;
-            currentStoryLine = 0;
-            if (currentDay > 2) { // 展示版縮短流程
-                currentState = STATES.END;
-                mainCharacter.setEmotion('happy');
-            } else {
-                currentStage = originStages['名門嫡女'];
-                mainCharacter.setEmotion('normal');
-                currentState = STATES.STORY;
-            }
-        }
-        else if (currentState === STATES.END) {
-            if (isHovered({x: 300, y: 600, w: 200, h: 60})) {
-                currentDay = 1;
-                player.knowledgeScore = 50;
-                
-                // 重置好感度
-                for(let key in player.affections) {
-                    player.affections[key].target = 50;
-                    player.affections[key].current = 50;
-                    player.affections[key].status = "平淡";
-                }
-
-                currentStage = introStage;
-                currentStoryLine = 0;
-                mainCharacter.setEmotion('normal');
-                currentState = STATES.STORY;
-            }
-        }
+        let rect = canvas.getBoundingClientRect();
+        handleInteraction((e.clientX - rect.left) * (cw / rect.width), (e.clientY - rect.top) * (ch / rect.height));
     });
+    
+    canvas.addEventListener('touchstart', e => { 
+        e.preventDefault(); 
+        let rect = canvas.getBoundingClientRect();
+        let cx = (e.touches[0].clientX - rect.left) * (cw / rect.width);
+        let cy = (e.touches[0].clientY - rect.top) * (ch / rect.height);
+        mouse.targetX = cx; mouse.targetY = cy;
+        handleInteraction(cx, cy); 
+    }, {passive: false});
 
-    // 啟動遊戲
     requestAnimationFrame(gameLoop);
 
 </script>
