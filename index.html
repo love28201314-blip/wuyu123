@@ -31,7 +31,7 @@
 
 <script>
     // ==========================================
-    // 1. 音效引擎 (Web Audio API)
+    // 1. 音效引擎 (修復瀏覽器 Autoplay 阻擋)
     // ==========================================
     let audioCtx = null;
     const SE = {
@@ -44,7 +44,7 @@
                 audioCtx.resume().catch(()=>{});
             }
         },
-        play: function(freq, type, duration, vol=0.1) {
+        playTone: function(freq, type, duration, vol=0.1) {
             if (!audioCtx || audioCtx.state !== 'running') return;
             try {
                 const osc = audioCtx.createOscillator();
@@ -56,20 +56,20 @@
                 osc.start(); osc.stop(audioCtx.currentTime + duration);
             } catch(e) {}
         },
-        hover: function() { this.play(600, 'sine', 0.1, 0.05); },
-        click: function() { this.play(400, 'square', 0.1, 0.1); },
+        hover: function() { this.playTone(600, 'sine', 0.1, 0.05); },
+        click: function() { this.playTone(400, 'square', 0.1, 0.1); },
         win: function() {
-            setTimeout(() => this.play(523.25, 'sine', 0.2, 0.1), 0);
-            setTimeout(() => this.play(659.25, 'sine', 0.2, 0.1), 100);
-            setTimeout(() => this.play(783.99, 'sine', 0.4, 0.1), 200);
+            setTimeout(() => this.playTone(523.25, 'sine', 0.2, 0.1), 0);
+            setTimeout(() => this.playTone(659.25, 'sine', 0.2, 0.1), 100);
+            setTimeout(() => this.playTone(783.99, 'sine', 0.4, 0.1), 200);
         },
         fail: function() {
-            setTimeout(() => this.play(200, 'sawtooth', 0.3, 0.1), 0);
-            setTimeout(() => this.play(150, 'sawtooth', 0.4, 0.1), 150);
+            setTimeout(() => this.playTone(200, 'sawtooth', 0.3, 0.1), 0);
+            setTimeout(() => this.playTone(150, 'sawtooth', 0.4, 0.1), 150);
         },
         save: function() {
-            setTimeout(() => this.play(880, 'sine', 0.1, 0.05), 0);
-            setTimeout(() => this.play(1760, 'sine', 0.3, 0.05), 100);
+            setTimeout(() => this.playTone(880, 'sine', 0.1, 0.05), 0);
+            setTimeout(() => this.playTone(1760, 'sine', 0.3, 0.05), 100);
         }
     };
 
@@ -80,29 +80,28 @@
     const ctx = canvas.getContext('2d');
 
     const STATES = { START: 0, CREATION: 1, DAY_TRANSITION: 2, MAP_EXPLORE: 3, STORY: 4, QUESTION: 5, FEEDBACK: 6, ENDING_ANIMATION: 7, END: 8 };
-    let state = STATES.START, day = 1, currentStage = null, storyLine = 0, fbText = "", time = 0;
-    let mouse = {x: -100, y: -100}, lastHover = null, currentExpr = 'normal', shake = 0, flash = {a: 0, c: '#fff'};
-    let pts = [], fTexts = [], sfxs = [], bgCvs = {};
-    let isEarlyEnd = false, earlyEndChar = "", endScenes = [], endIdx = 0, eTitle = "", eColor = "", eType = "normal";
-    
-    let snowflakes = [], raindrops = [], petals = [];
+    let currentState = STATES.START;
+    let currentDay = 1, currentStage = null, currentStoryLine = 0, selectedOptionFeedback = "", time = 0;
+    let mouse = {x: -100, y: -100}, lastHoveredBtn = null, currentExpr = 'normal', shakeAmount = 0;
+    let flashAlpha = 0, flashColor = '#ffffff';
+    let particles = [], floatingTexts = [], specialEffects = [], bgCanvases = {};
+    let isEarlyGameOver = false, earlyGameOverCharId = "", endingScenes = [], currentEndingSceneIndex = 0;
+    let finalEndingTitle = "", finalEndingColor = "", endingType = "normal";
 
-    const NList = ['盛明蘭','沈珍珠','王語嫣','趙盼兒','李清照'], FList = ['f1','f2','f3'], CList = ['c1','c2','c3'], BList = ['名門嫡女','書香世家','富商巨賈'];
-    const residences = ['華麗正房', '雅致書閣', '繁華暖閣']; 
-    let selN = 0, selF = 0, selC = 0, selB = 0;
+    const namesList = ['盛明蘭','沈珍珠','王語嫣','趙盼兒','李清照'], faceKeys = ['f1','f2','f3'], clothKeys = ['c1','c2','c3'], backgrounds = ['名門嫡女','書香世家','富商巨賈'], residences = ['華麗正房', '雅致書閣', '繁華暖閣'];
+    let selectedNameIndex = 0, selectedFaceIndex = 0, selectedClothIndex = 0, selectedResIndex = 0;
     
-    let P = {
-        name: "主母", origin: "名門嫡女", id: "player_f1_c1", score: 50, 
-        residence: "華麗正房",
-        aff: {
-            maid: {n:"丫鬟 春桃", c:50, t:50, m:100, col:"#e8b4b8", s:"平淡"}, 
-            chef: {n:"膳房 總管", c:50, t:50, m:100, col:"#8c7a6b", s:"平淡"},
-            doctor: {n:"太醫 張大人", c:50, t:50, m:100, col:"#3a4f41", s:"平淡"}, 
-            medic: {n:"醫女 蘇氏", c:50, t:50, m:100, col:"#8caeb8", s:"平淡"}
+    let player = {
+        name: "主母夫人", origin: "名門嫡女", avatarId: "player_f1_c1", knowledgeScore: 50, residence: "華麗正房",
+        affections: {
+            maid: { name: "丫鬟 春桃", current: 50, target: 50, max: 100, color: "#e8b4b8", status: "平淡" },
+            chef: { name: "膳房 總管", current: 50, target: 50, max: 100, color: "#8c7a6b", status: "平淡" },
+            doctor: { name: "太醫 張大人", current: 50, target: 50, max: 100, color: "#3a4f41", status: "平淡" },
+            medic: { name: "醫女 蘇氏", current: 50, target: 50, max: 100, color: "#8caeb8", status: "平淡" }
         }
     };
 
-    const days = [
+    const daysData = [
         { d: "產後第一天", w: "sunny", l: "主母臥房", e: "初為人母，您抱著剛出生的孩兒，心中充滿溫暖。大宋的陽光和煦，是個好兆頭。" },
         { d: "產後第二天", w: "cloudy", l: "侯府花園", e: "天色微陰。小少爺的哭聲劃破了寧靜，新手母親與下人們共同努力照護。" },
         { d: "產後第三天", w: "rainy", l: "侯府正廳", e: "窗外下起淅瀝小雨。今日似乎有來自府外或長輩的特別關切與愛護。" }, 
@@ -112,9 +111,273 @@
         { d: "產後第七天", w: "sunny", l: "侯府花園", e: "轉眼已至第七日，您在大家的陪伴下，順利完成了初期的調養適應。" }
     ];
 
+    let questionPools = { maid: [], chef: [], doctor: [], medic: [] };
+
     // ==========================================
-    // 3. 完美細化版 SVG 生成器 
+    // 3. 儲存與讀取系統 (localStorage)
     // ==========================================
+    const SAVE_KEY = "BianjingNursingGameSaveV6";
+
+    function saveGame() {
+        const saveData = {
+            currentDay, player, questionPools,
+            selectedNameIndex, selectedFaceIndex, selectedClothIndex, selectedResIndex
+        };
+        localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+        floatingTexts.push(new FloatingText(canvas.width / 2, 200, "【進度已儲存】", "#66ff66"));
+        SoundEngine.save();
+    }
+
+    function loadGame() {
+        const savedStr = localStorage.getItem(SAVE_KEY);
+        if (savedStr) {
+            try {
+                const data = JSON.parse(savedStr);
+                currentDay = data.currentDay; player = data.player; questionPools = data.questionPools;
+                selectedNameIndex = data.selectedNameIndex; selectedFaceIndex = data.selectedFaceIndex;
+                selectedClothIndex = data.selectedClothIndex; selectedResIndex = data.selectedResIndex;
+                isEarlyGameOver = false; currentState = STATES.DAY_TRANSITION;
+                SoundEngine.win(); return true;
+            } catch (e) { return false; }
+        }
+        return false;
+    }
+
+    function hasSaveGame() { return localStorage.getItem(SAVE_KEY) !== null; }
+
+    // ==========================================
+    // 4. 物理特效與天氣粒子類別
+    // ==========================================
+    class Snowflake {
+        constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height; this.size = Math.random() * 3 + 1; this.speedY = Math.random() * 1 + 0.5; this.speedX = (Math.random() - 0.5) * 0.5; this.opacity = Math.random() * 0.5 + 0.3; }
+        update() { this.y += this.speedY; this.x += this.speedX; if (this.y > canvas.height) { this.y = -10; this.x = Math.random() * canvas.width; } }
+        draw(ctx) { ctx.save(); ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    }
+
+    class Raindrop {
+        constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height; this.speed = Math.random() * 15 + 10; this.length = Math.random() * 20 + 10; }
+        update() { this.y += this.speed; if (this.y > canvas.height) { this.y = -20; this.x = Math.random() * canvas.width; } }
+        draw(ctx) { ctx.strokeStyle = 'rgba(150, 180, 220, 0.4)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x - 2, this.y + this.length); ctx.stroke(); }
+    }
+
+    class Petal {
+        constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height; this.vx = Math.random() * 1 + 0.5; this.vy = Math.random() * 1 + 1; this.size = Math.random() * 5 + 3; this.angle = Math.random() * Math.PI * 2; this.spin = Math.random() * 0.05 - 0.025; }
+        update() { this.x += this.vx; this.y += this.vy; this.angle += this.spin; if (this.y > canvas.height) { this.y = -10; this.x = Math.random() * canvas.width; } }
+        draw(ctx) { ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle); ctx.fillStyle = 'rgba(230, 180, 190, 0.5)'; ctx.beginPath(); ctx.ellipse(0, 0, this.size, this.size / 2, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    }
+
+    class Confetti {
+        constructor(x, y, colorCode) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 16; this.vy = (Math.random() - 1) * 16 - 2; this.color = colorCode || ['#cc4444', '#44cc44', '#4488cc', '#eebb44'][Math.floor(Math.random() * 4)]; this.life = 1.0; this.wobble = Math.random() * Math.PI * 2; this.wobbleSpeed = Math.random() * 0.1 + 0.05; this.rotation = Math.random() * Math.PI * 2; this.rotSpeed = (Math.random() - 0.5) * 0.2; }
+        update() { this.vx *= 0.94; this.vy += 0.4; this.x += this.vx + Math.sin(this.wobble) * 2.5; this.y += this.vy; this.wobble += this.wobbleSpeed; this.rotation += this.rotSpeed; this.life -= 0.015; }
+        draw(ctx) { ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y); ctx.rotate(this.rotation); ctx.fillStyle = this.color; ctx.fillRect(-6, -6, 12, 12); ctx.restore(); }
+    }
+
+    class DarkAura {
+        constructor(x, y) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 12; this.vy = (Math.random() - 0.5) * 12 - 2; this.size = Math.random() * 15 + 5; this.life = 1.0; }
+        update() { this.x += this.vx; this.y += this.vy; this.vx *= 0.9; this.vy *= 0.9; this.size *= 0.97; this.life -= 0.02; }
+        draw(ctx) { ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = '#94a1b2'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
+    }
+
+    class GoldenRing { 
+        constructor(x, y) { this.x = x; this.y = y; this.r = 0; this.life = 1.0; }
+        update() { this.r += (200 - this.r) * 0.15; this.life -= 0.02; }
+        draw(ctx) { ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 10 * this.life; ctx.shadowColor = '#ffea00'; ctx.shadowBlur = 15; ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2); ctx.stroke(); ctx.restore(); }
+    }
+
+    class RedSlash { 
+        constructor(x, y) { this.x = x; this.y = y; this.life = 1.0; this.progress = 0; }
+        update() { this.progress += (1 - this.progress) * 0.25; this.life -= 0.025; }
+        draw(ctx) { ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y); ctx.strokeStyle = '#ffbbbb'; ctx.lineWidth = 20; ctx.lineCap = 'round'; ctx.shadowColor = 'rgba(255, 150, 150, 0.6)'; ctx.shadowBlur = 20; let length = 100 * this.progress; ctx.beginPath(); ctx.moveTo(-length, -length); ctx.lineTo(length, length); ctx.stroke(); ctx.restore(); }
+    }
+
+    class FloatingText {
+        constructor(x, y, text, color) { this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.scale = 0.5; }
+        update() { this.y -= 1.2; this.life -= 0.012; this.scale += (1 - this.scale) * 0.2; }
+        draw(ctx) { ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y); ctx.scale(this.scale, this.scale); ctx.fillStyle = this.color; ctx.font = 'bold 30px "Kaiti", serif'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; ctx.textAlign = 'center'; ctx.fillText(this.text, 0, 0); ctx.restore(); }
+    }
+
+    let snowflakes = Array.from({ length: 100 }, () => new Snowflake());
+    let raindrops = Array.from({ length: 80 }, () => new Raindrop());
+    let petals = Array.from({ length: 30 }, () => new Petal());
+
+    // ==========================================
+    // 5. 畫面渲染與 UI 工具
+    // ==========================================
+    const UI = {
+        box: {x: 80, y: 350, w: 640, h: 300}, 
+        btns: [{x: 80, y: 680, w: 640, h: 60}, {x: 80, y: 760, w: 640, h: 60}, {x: 80, y: 840, w: 640, h: 60}],
+        nL: {x: 230, y: 300, w: 40, h: 40}, nR: {x: 480, y: 300, w: 40, h: 40}, 
+        rL: {x: 230, y: 400, w: 40, h: 40}, rR: {x: 480, y: 400, w: 40, h: 40},
+        fL: {x: 230, y: 500, w: 40, h: 40}, fR: {x: 480, y: 500, w: 40, h: 40},
+        cL: {x: 230, y: 600, w: 40, h: 40}, cR: {x: 480, y: 600, w: 40, h: 40},
+        cfBtn: {x: 300, y: 700, w: 200, h: 60},
+        maps: {maid:{x:80,y:400,w:300,h:180,n:"【夫人臥房】",d:"尋找春桃"}, chef:{x:420,y:400,w:300,h:180,n:"【侯府膳房】",d:"傳喚總管"}, doc:{x:80,y:620,w:300,h:180,n:"【前院廳堂】",d:"召見太醫"}, med:{x:420,y:620,w:300,h:180,n:"【廂房醫署】",d:"私下請教"}}
+    };
+
+    function getLines(ctx, text, maxWidth) {
+        if (!text) return [];
+        let lines = [], paragraphs = text.split('\n');
+        for (let p of paragraphs) {
+            let line = '';
+            for (let char of p) {
+                let testLine = line + char;
+                if (ctx.measureText(testLine).width > maxWidth && line.length > 0) {
+                    lines.push(line); line = char;
+                } else { line = testLine; }
+            }
+            if (line.length > 0 || paragraphs.length > 1) lines.push(line);
+        }
+        return lines;
+    }
+
+    function isHovered(btn) {
+        return mouse.x >= btn.x && mouse.x <= btn.x + btn.w && mouse.y >= btn.y && mouse.y <= btn.y + btn.h;
+    }
+    
+    function drawButton(btnObj, text, isSmall=false) {
+        let hover = isHovered(btnObj); 
+        if(hover && lastHoveredBtn !== text){ SoundEngine.hover(); lastHoveredBtn = text; } 
+        else if(!hover && lastHoveredBtn === text){ lastHoveredBtn = null; }
+        
+        ctx.fillStyle = hover ? '#a6855b' : 'rgba(44,36,27,0.9)'; 
+        ctx.fillRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
+        ctx.strokeStyle = hover ? '#fff' : '#cdae77'; 
+        ctx.lineWidth = isSmall ? 2 : (hover ? 3 : 2); 
+        ctx.strokeRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
+        ctx.fillStyle = hover ? '#fff' : '#f4ebd0'; 
+        ctx.font = isSmall ? 'bold 24px Kaiti' : '20px Kaiti'; 
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        
+        if(isSmall) {
+            ctx.fillText(text, btnObj.x + btnObj.w/2, btnObj.y + btnObj.h/2); 
+        } else { 
+            let ls = getLines(ctx, text, btnObj.w - 40); 
+            let sy = btnObj.y + btnObj.h/2 - (ls.length-1)*13; 
+            for(let i=0; i<ls.length; i++) ctx.fillText(ls[i], btnObj.x+btnObj.w/2, sy+i*26); 
+        } 
+        ctx.textBaseline='alphabetic';
+    }
+
+    function drawMapZone(zoneObj, roleId) {
+        let hover = isHovered(zoneObj);
+        if (hover && lastHoveredBtn !== zoneObj.name) { SoundEngine.hover(); lastHoveredBtn = zoneObj.name; }
+        else if (!hover && lastHoveredBtn === zoneObj.name) { lastHoveredBtn = null; }
+
+        ctx.fillStyle = hover ? 'rgba(100, 70, 50, 0.9)' : 'rgba(44, 36, 27, 0.85)';
+        ctx.fillRect(zoneObj.x, zoneObj.y, zoneObj.w, zoneObj.h);
+        ctx.strokeStyle = hover ? '#ffffff' : '#cdae77'; 
+        ctx.lineWidth = hover ? 4 : 2;
+        ctx.strokeRect(zoneObj.x, zoneObj.y, zoneObj.w, zoneObj.h);
+        
+        ctx.fillStyle = hover ? '#ffffff' : '#ffdd66'; 
+        ctx.font = 'bold 32px Kaiti'; ctx.textAlign = 'center'; 
+        ctx.fillText(zoneObj.name, zoneObj.x + zoneObj.w / 2, zoneObj.y + 80);
+        
+        ctx.fillStyle = '#f4ebd0'; ctx.font = '22px Kaiti'; 
+        ctx.fillText(zoneObj.desc, zoneObj.x + zoneObj.w / 2, zoneObj.y + 130);
+        
+        let img = loadedImages[roleId] && loadedImages[roleId]['normal'];
+        if(img && img.complete) {
+            ctx.drawImage(img, 40, 30, 120, 120, zoneObj.x + zoneObj.w/2 - 40, zoneObj.y + 110, 80, 80);
+        }
+    }
+
+    function drawDialogueBox(name, text, showHint = true) {
+        ctx.fillStyle = 'rgba(44, 36, 27, 0.95)'; 
+        ctx.fillRect(UI.box.x, UI.box.y, UI.box.w, UI.box.h); 
+        ctx.strokeStyle = '#cdae77'; ctx.lineWidth = 3; 
+        ctx.strokeRect(UI.box.x, UI.box.y, UI.box.w, UI.box.h);
+        ctx.strokeStyle = 'rgba(205,174,119,0.3)'; ctx.lineWidth = 1; 
+        ctx.strokeRect(UI.box.x+10, UI.box.y+10, UI.box.w-20, UI.box.h-20);
+
+        if(name) { 
+            ctx.fillStyle = '#cdae77'; 
+            ctx.fillRect(UI.box.x + UI.box.w/2 - 120, UI.box.y - 25, 240, 50); 
+            ctx.fillStyle = '#2c241b'; ctx.font = 'bold 26px Kaiti'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(name, UI.box.x + UI.box.w/2, UI.box.y); 
+            ctx.textBaseline = 'alphabetic';
+        }
+        
+        ctx.fillStyle = (text.includes("衛教小知識") || text.includes("調養小記")) ? '#ffdd66' : '#f4ebd0'; 
+        ctx.font = '24px Kaiti'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; 
+        let ls = getLines(ctx, text, UI.box.w - 60);
+        for(let i=0; i<ls.length; i++) ctx.fillText(ls[i], UI.box.x+30, UI.box.y+50+i*34); 
+        ctx.textBaseline = 'alphabetic';
+        
+        if(showHint) { 
+            ctx.globalAlpha = (Math.sin(time*5)+1)/2*0.5+0.5; 
+            ctx.fillStyle = '#cdae77'; ctx.font = '18px Kaiti'; ctx.textAlign = 'right'; 
+            ctx.fillText("▼ 點擊畫面繼續 ▼", UI.box.x+UI.box.w-20, UI.box.y+UI.box.h-20); 
+            ctx.globalAlpha = 1.0; 
+        }
+    }
+
+    function drawDatePanel() {
+        let d = daysData[Math.min(currentDay - 1, daysData.length - 1)];
+        ctx.fillStyle = 'rgba(44, 36, 27, 0.85)'; ctx.fillRect(20, 20, 300, 110); 
+        ctx.strokeStyle = '#cdae77'; ctx.lineWidth = 2; ctx.strokeRect(20, 20, 300, 110);
+        ctx.fillStyle = '#ffdd66'; ctx.font = 'bold 22px Kaiti'; ctx.textAlign = 'left'; 
+        ctx.fillText('【大宋 宣和元年】', 30, 50);
+        ctx.fillStyle = '#f4ebd0'; ctx.font = '20px Kaiti'; 
+        ctx.fillText(d.day, 40, 85); 
+        ctx.fillText(`天氣: ${{sunny:"晴朗", cloudy:"多雲", rainy:"陰雨", snowy:"飛雪"}[d.weather]}`, 160, 85);
+    }
+
+    function drawStatsPanel() {
+        ctx.fillStyle = 'rgba(44, 36, 27, 0.85)'; ctx.fillRect(480, 20, 300, 210); 
+        ctx.strokeStyle = '#8b6b4a'; ctx.strokeRect(480, 20, 300, 210);
+        ctx.fillStyle = '#eebb44'; ctx.font = 'bold 22px Kaiti'; ctx.textAlign = 'left'; 
+        ctx.fillText('【府邸人際關係】', 500, 50);
+        
+        let sY = 90; 
+        for(let k in player.affections) {
+            let s = player.affections[k]; 
+            s.current += (s.target - s.current) * 0.05;
+            let col = '#f4ebd0'; 
+            if(s.target <= 0) col = '#ff2222'; 
+            else if(['嫌隙','心寒','厭惡','荒唐','心灰意冷','發抖','氣急敗壞','慌張','恐懼','強烈厭惡'].some(x => s.status.includes(x))) col = '#ff6666'; 
+            else if(['崇拜','崇敬','死心塌地','情同姐妹','父母心','敬畏','知音','安心','欣慰','敬佩'].some(x => s.status.includes(x))) col = '#66ff66';
+            
+            ctx.fillStyle = '#f4ebd0'; ctx.font = '18px Kaiti'; ctx.fillText(s.name, 500, sY); 
+            ctx.fillStyle = col; ctx.textAlign = 'right'; ctx.fillText(`[${s.status}]`, 760, sY); ctx.textAlign = 'left';
+            ctx.fillStyle = '#333'; ctx.fillRect(500, sY+10, 260, 8); 
+            ctx.fillStyle = s.color; ctx.fillRect(500, sY+10, Math.max(0, (s.current/s.max)*260), 8); 
+            sY += 40;
+        }
+    }
+
+    function getBackground(loc) {
+        if(bgCanvases[loc]) return bgCanvases[loc]; 
+        let c = document.createElement('canvas'); c.width = 800; c.height = 900; let bx = c.getContext('2d');
+        if(loc.includes('臥房') || loc.includes('正房')){ 
+            let g = bx.createLinearGradient(0,0,0,900); g.addColorStop(0,"#2a1e12"); g.addColorStop(1,"#1a0f0a"); bx.fillStyle=g; bx.fillRect(0,0,800,900); 
+            bx.fillStyle="rgba(255,200,100,0.05)"; bx.fillRect(50,50,700,800); 
+            bx.strokeStyle="#3a2a1a"; bx.lineWidth=4; 
+            for(let i=50;i<=750;i+=100){bx.beginPath();bx.moveTo(i,50);bx.lineTo(i,850);bx.stroke();} 
+            for(let j=50;j<=850;j+=100){bx.beginPath();bx.moveTo(50,j);bx.lineTo(750,j);bx.stroke();} 
+        }
+        else if(loc.includes('書閣')){ 
+            let g = bx.createLinearGradient(0,0,0,900); g.addColorStop(0,"#122a2a"); g.addColorStop(1,"#051a1a"); bx.fillStyle=g; bx.fillRect(0,0,800,900); 
+            bx.fillStyle="rgba(200,255,200,0.05)"; bx.fillRect(100,100,600,700); 
+            bx.strokeStyle="#050a0a"; bx.lineWidth=6; 
+            for(let i=100;i<=700;i+=40){bx.beginPath();bx.moveTo(100,i);bx.lineTo(700,i);bx.stroke();} 
+        }
+        else if(loc.includes('膳房')){ 
+            let g = bx.createLinearGradient(0,0,0,900); g.addColorStop(0,"#1a1a1a"); g.addColorStop(1,"#2a1515"); bx.fillStyle=g; bx.fillRect(0,0,800,900); 
+            let gl = bx.createRadialGradient(400,800,50,400,800,600); gl.addColorStop(0,"rgba(255,100,0,0.3)"); gl.addColorStop(1,"rgba(255,100,0,0)"); bx.fillStyle=gl; bx.fillRect(0,0,800,900); 
+            bx.fillStyle="#0a0505"; bx.fillRect(100, 700, 600, 200); 
+        }
+        else if(loc.includes('花園')){ 
+            let g = bx.createLinearGradient(0,0,0,900); g.addColorStop(0,"#080c1a"); g.addColorStop(1,"#1c2841"); bx.fillStyle=g; bx.fillRect(0,0,800,900); 
+            bx.fillStyle="rgba(255,255,230,0.8)"; bx.shadowColor="#ffea00"; bx.shadowBlur=60; bx.beginPath(); bx.arc(700,150,60,0,Math.PI*2); bx.fill(); bx.shadowBlur=0; 
+            bx.fillStyle="#050a14"; bx.beginPath(); bx.moveTo(0,900); bx.lineTo(0,600); bx.quadraticCurveTo(400,400,800,700); bx.lineTo(800,900); bx.fill(); 
+        }
+        else{ 
+            let g = bx.createLinearGradient(0,0,0,900); g.addColorStop(0,"#1f1111"); g.addColorStop(1,"#3f1a1a"); bx.fillStyle=g; bx.fillRect(0,0,800,900); 
+        }
+        bgCanvases[loc] = c; return c;
+    }
+
     function createCharacterSVG(role, expr) {
         let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250">
             <defs>
@@ -122,9 +385,8 @@
                 <linearGradient id="hair" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#332a2a"/><stop offset="100%" stop-color="#110d0d"/></linearGradient>
                 <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ffeaa7"/><stop offset="100%" stop-color="#d4af37"/></linearGradient>
             </defs>
-            <circle cx="100" cy="110" r="85" fill="#ffffff" opacity="0.1"/>`; // 背景光暈
+            <circle cx="100" cy="110" r="85" fill="#ffffff" opacity="0.1"/>`;
 
-        // Body & Collar (加上脖子與精緻衣領)
         if (role === 'maid') {
             svg += `<path d="M30 250 L60 140 C80 150, 120 150, 140 140 L170 250 Z" fill="#d49a9e" stroke="#8a5358" stroke-width="2"/>
                     <path d="M70 140 L100 190 L130 140 Z" fill="#f2e1e2"/>
@@ -162,73 +424,62 @@
             </svg>`;
         }
 
-        // Neck
         svg += `<rect x="85" y="125" width="30" height="25" fill="url(#skin)"/>`;
 
-        // Face
         let fw = role === 'chef' ? 48 : (role.includes('f2') ? 42 : (role.includes('f3') ? 46 : 38));
         let fh = role === 'chef' ? 52 : (role.includes('f2') ? 50 : (role.includes('f3') ? 46 : 54));
         svg += `<ellipse cx="100" cy="95" rx="${fw}" ry="${fh}" fill="url(#skin)" stroke="#c29a82" stroke-width="1.5"/>`;
 
-        // Expressions
         let ey=88, my=120;
-        if(expr==='angry') svg+=`<ellipse cx="100" cy="${ey-5}" rx="${fw-5}" ry="20" fill="#332222" opacity="0.4"/>`;
+        if(expr==='angry') svg+=`<ellipse cx="100" cy="${ey-5}" rx="${fw-5}" ry="20" fill="#332222" opacity="0.3"/>`;
         if(expr==='shocked') svg+=`<path d="M${100-fw+5} 60 Q100 90 ${100+fw-5} 60 Z" fill="#6699cc" opacity="0.5"/>`;
 
         if(expr==='happy'){
             svg+=`<path d="M 68 ${ey+2} Q 80 ${ey-6} 90 ${ey+2} M 110 ${ey+2} Q 120 ${ey-6} 132 ${ey+2}" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round"/>`;
             svg+=`<path d="M 90 ${my-2} Q 100 ${my+12} 110 ${my-2} Z" fill="#d68383"/>`;
             svg+=`<ellipse cx="70" cy="${ey+12}" rx="10" ry="5" fill="#ff7777" opacity="0.8"/><ellipse cx="130" cy="${ey+12}" rx="10" ry="5" fill="#ff7777" opacity="0.8"/>`;
-            svg+=`<path d="M 30 70 L 40 55 L 50 70 Z M 160 50 L 170 35 L 180 50 Z" fill="url(#gold)"/>`; // Stars
+            svg+=`<path d="M 30 70 L 40 55 L 50 70 Z M 160 50 L 170 35 L 180 50 Z" fill="url(#gold)"/>`; 
         }else if(expr==='shocked'){
             svg+=`<circle cx="78" cy="${ey}" r="6" fill="#fff" stroke="#222" stroke-width="1.5"/><circle cx="78" cy="${ey}" r="1.5" fill="#111"/>`;
             svg+=`<circle cx="122" cy="${ey}" r="6" fill="#fff" stroke="#222" stroke-width="1.5"/><circle cx="122" cy="${ey}" r="1.5" fill="#111"/>`;
             svg+=`<circle cx="100" cy="${my+8}" r="6" fill="#444"/>`;
-            svg+=`<path d="M 145 70 Q 155 85 145 90 Q 135 85 145 70 Z" fill="#99ccff" opacity="0.9"/>`; // Sweat
+            svg+=`<path d="M 145 70 Q 155 85 145 90 Q 135 85 145 70 Z" fill="#99ccff" opacity="0.9"/>`; 
             svg+=`<path d="M 70 ${ey-12} Q 80 ${ey-18} 90 ${ey-15} M 130 ${ey-12} Q 120 ${ey-18} 110 ${ey-15}" fill="none" stroke="#222" stroke-width="2.5" stroke-linecap="round"/>`;
         }else if(expr==='angry'){
             svg+=`<path d="M 65 ${ey-4} L 88 ${ey+3} M 135 ${ey-4} L 112 ${ey+3}" stroke="#222" stroke-width="3.5" stroke-linecap="round"/>`;
             svg+=`<circle cx="80" cy="${ey+5}" r="2.5" fill="#111"/><circle cx="120" cy="${ey+5}" r="2.5" fill="#111"/>`;
             svg+=`<path d="M 88 ${my+6} Q 100 ${my-2} 112 ${my+6}" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round"/>`;
-            svg+=`<path d="M 135 45 L 155 55 M 155 45 L 135 55 M 135 50 L 155 50 M 145 45 L 145 55" stroke="#ff3333" stroke-width="2.5"/>`; // Anger symbol
+            svg+=`<path d="M 135 45 L 155 55 M 155 45 L 135 55 M 135 50 L 155 50 M 145 45 L 145 55" stroke="#ff3333" stroke-width="2.5"/>`; 
         }else{
             svg+=`<path d="M 68 ${ey-4} Q 80 ${ey-8} 90 ${ey-4} M 110 ${ey-4} Q 120 ${ey-8} 132 ${ey-4}" fill="none" stroke="#222" stroke-width="2" stroke-linecap="round"/>`;
             svg+=`<circle cx="80" cy="${ey}" r="4" fill="#222"/><circle cx="120" cy="${ey}" r="4" fill="#222"/>`;
             svg+=`<path d="M 90 ${my} Q 100 ${my+5} 110 ${my}" fill="none" stroke="#c29a82" stroke-width="2.5" stroke-linecap="round"/>`;
         }
 
-        // Hair & Hats
         if(role.startsWith('player_')){ 
             let f=role.split('_')[1]; 
-            svg+=`<path d="M 35 90 C 20 220, 180 220, 165 90 Z" fill="url(#hair)"/>`; // Back hair
-            if(f==='f1') { 
-                svg+=`<path d="M 50 65 C 40 0, 160 0, 150 65 Z" fill="url(#hair)"/><ellipse cx="100" cy="20" rx="40" ry="30" fill="url(#hair)"/><path d="M 80 20 L 40 -10 M 120 20 L 160 -10" stroke="url(#gold)" stroke-width="4"/><circle cx="40" cy="-10" r="7" fill="#ff4444"/><circle cx="160" cy="-10" r="7" fill="#4444ff"/>`; 
-            } else if(f==='f2') { 
-                svg+=`<path d="M 40 65 C 20 -10, 180 -10, 160 65 Z" fill="url(#hair)"/><ellipse cx="100" cy="15" rx="60" ry="35" fill="url(#hair)"/><path d="M 100 15 L 100 -15" stroke="url(#gold)" stroke-width="5"/><circle cx="100" cy="-15" r="10" fill="#44cc44"/><path d="M 80 15 L 60 5 M 120 15 L 140 5" stroke="url(#gold)" stroke-width="3"/>`; 
-            } else { 
-                svg+=`<path d="M 45 65 C 40 10, 160 10, 155 65 Z" fill="url(#hair)"/><circle cx="55" cy="25" r="30" fill="url(#hair)"/><circle cx="145" cy="25" r="30" fill="url(#hair)"/><circle cx="55" cy="25" r="12" fill="#ff9999"/><circle cx="145" cy="25" r="12" fill="#ff9999"/>`; 
-            }
+            svg+=`<path d="M 35 90 C 20 220, 180 220, 165 90 Z" fill="url(#hair)"/>`; 
+            if(f==='f1') { svg+=`<path d="M 50 65 C 40 0, 160 0, 150 65 Z" fill="url(#hair)"/><ellipse cx="100" cy="20" rx="40" ry="30" fill="url(#hair)"/><path d="M 80 20 L 40 -10 M 120 20 L 160 -10" stroke="url(#gold)" stroke-width="4"/><circle cx="40" cy="-10" r="7" fill="#ff4444"/><circle cx="160" cy="-10" r="7" fill="#4444ff"/>`; } 
+            else if(f==='f2') { svg+=`<path d="M 40 65 C 20 -10, 180 -10, 160 65 Z" fill="url(#hair)"/><ellipse cx="100" cy="15" rx="60" ry="35" fill="url(#hair)"/><path d="M 100 15 L 100 -15" stroke="url(#gold)" stroke-width="5"/><circle cx="100" cy="-15" r="10" fill="#44cc44"/><path d="M 80 15 L 60 5 M 120 15 L 140 5" stroke="url(#gold)" stroke-width="3"/>`; } 
+            else { svg+=`<path d="M 45 65 C 40 10, 160 10, 155 65 Z" fill="url(#hair)"/><circle cx="55" cy="25" r="30" fill="url(#hair)"/><circle cx="145" cy="25" r="30" fill="url(#hair)"/><circle cx="55" cy="25" r="12" fill="#ff9999"/><circle cx="145" cy="25" r="12" fill="#ff9999"/>`; }
         } 
         else if(role==='maid') {
             svg+=`<path d="M 45 65 C 40 10, 160 10, 155 65 Z" fill="url(#hair)"/><circle cx="50" cy="35" r="25" fill="url(#hair)"/><circle cx="150" cy="35" r="25" fill="url(#hair)"/><path d="M 50 35 L 30 80 M 150 35 L 170 80" stroke="#ff6666" stroke-width="6" stroke-linecap="round"/>`;
         } 
         else if(role==='chef') {
-            svg+=`<path d="M 45 80 Q 100 20 155 80 L 140 120 Q 100 70 60 120 Z" fill="#665c54"/><path d="M 60 40 C 60 -10, 140 -10, 140 40 Z" fill="#e8e8e8" stroke="#ccc" stroke-width="2"/><path d="M 70 135 Q 100 180 130 135 Z" fill="#4a423b"/>`; // Chef hat & Beard
+            svg+=`<path d="M 45 80 Q 100 20 155 80 L 140 120 Q 100 70 60 120 Z" fill="#665c54"/><path d="M 60 40 C 60 -10, 140 -10, 140 40 Z" fill="#e8e8e8" stroke="#ccc" stroke-width="2"/><path d="M 70 135 Q 100 180 130 135 Z" fill="#4a423b"/>`; 
         } 
         else if(role==='doctor') {
-            svg+=`<path d="M 50 45 L 150 45 L 140 0 L 60 0 Z" fill="#111"/><path d="M 10 40 L 190 40 L 190 50 L 10 50 Z" fill="#000"/><path d="M 80 135 Q 100 200 120 135 Z" fill="#eeeeee"/>`; // Official hat & White beard
+            svg+=`<path d="M 50 45 L 150 45 L 140 0 L 60 0 Z" fill="#111"/><path d="M 10 40 L 190 40 L 190 50 L 10 50 Z" fill="#000"/><path d="M 80 135 Q 100 200 120 135 Z" fill="#eeeeee"/>`; 
         } 
         else if(role==='medic') {
-            svg+=`<path d="M 40 65 C 40 0, 160 0, 160 65 Z" fill="url(#hair)"/><path d="M 55 15 L 145 15 L 135 55 L 65 55 Z" fill="#8caeb8"/><circle cx="100" cy="35" r="8" fill="url(#gold)"/>`; // Medic wrap
+            svg+=`<path d="M 40 65 C 40 0, 160 0, 160 65 Z" fill="url(#hair)"/><path d="M 55 15 L 145 15 L 135 55 L 65 55 Z" fill="#8caeb8"/><circle cx="100" cy="35" r="8" fill="url(#gold)"/>`; 
         }
         
         return svg+`</svg>`;
     }
 
     const LImgs = {};
-    // ==========================================
-    // 解決未定義的變數與圖片預載入
-    // ==========================================
     ['maid','chef','doctor','medic','baby',...FList.flatMap(f=>CList.map(c=>`player_${f}_${c}`))]
     .forEach(r => { 
         LImgs[r] = {}; 
@@ -242,7 +493,7 @@
     });
 
     // ==========================================
-    // 4. 衛教題庫與劇情
+    // 衛教題庫與劇情
     // ==========================================
     const introStage = {type: "quiz", img: "medic", char: "醫女 蘇氏", q: "【起始抉擇】望著孩兒，您在心中暗暗定下規矩：",
         s: [
@@ -325,36 +576,18 @@
     };
 
     // ==========================================
-    // 5. 儲存系統 (localStorage)
+    // 5. 存檔系統
     // ==========================================
-    const SAVE_KEY = "BianjingNursingGameSaveV5";
-
     function saveGame() {
-        const d = { day: currentDay, P: P, Q: QPool, sn: selN, sf: selF, sc: selC, sb: selB };
-        localStorage.setItem(SAVE_KEY, JSON.stringify(d));
-        fTexts.push(new FloatingText(canvas.width / 2, 200, "【進度已儲存】", "#66ff66"));
-        SE.save();
+        localStorage.setItem("BJS", JSON.stringify({d:day,P,Q:QPool,sn:selN,sf:selF,sc:selC,sb:selB}));
+        fTexts.push(new FloatingText(400,200,"【進度已儲存】","#6ff")); SE.save();
     }
-
     function loadGame() {
-        const s = localStorage.getItem(SAVE_KEY);
-        if (s) {
-            try {
-                const d = JSON.parse(s);
-                currentDay = d.day; P = d.P; QPool = d.Q;
-                selN = d.sn; selF = d.sf; selC = d.sc; selB = d.sb;
-                isEarlyEnd = false; state = STATES.DAY_TRANSITION;
-                SE.win(); return true;
-            } catch (e) { return false; }
-        }
+        let s=localStorage.getItem("BJS"); 
+        if(s){try{let d=JSON.parse(s); day=d.d; P=d.P; QPool=d.Q; selN=d.sn; selF=d.sf; selC=d.sc; selB=d.sb; isEarlyEnd=false; state=STATES.DAY_TRANSITION; SE.win(); return true;}catch(e){}} 
         return false;
     }
-    function hasS() { return localStorage.getItem(SAVE_KEY) !== null; }
-
-    // ==========================================
-    // 6. 遊戲邏輯與洗牌
-    // ==========================================
-    function shuf(a) { let i = a.length, r, t; while(i!==0) { r=Math.floor(Math.random()*i); i-=1; t=a[i]; a[i]=a[r]; a[r]=t; } return a; }
+    function hasSaveGame() { return localStorage.getItem("BJS")!==null; }
 
     function initG() {
         isEarlyEnd = false; earlyEndChar = ""; P.score = 50;
@@ -438,119 +671,13 @@
         }
     }
 
-    // --- 主動畫迴圈 ---
-    function gameLoop(ts) {
-        time = ts / 1000; ctx.save();
-        if(shake>0) { ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake); shake*=0.85; if(shake<0.5) shake=0; }
-        
-        let dData = days[Math.min(day-1, days.length-1)], cLoc = dData.l, cWea = dData.w;
-        if(state===STATES.END_ANIM || state===STATES.END) { cLoc = eType==='bad'?'避風暖閣':(eType==='good'?'侯府花園':'雅致書閣'); cWea = eType==='bad'?'rainy':(eType==='good'?'sunny':'cloudy'); }
-        else if(state===STATES.CREATION) { cLoc = residences[selB]; }
-
-        ctx.drawImage(getBg(cLoc), 0, 0);
-        
-        if(state!==STATES.START) {
-            if(cWea==='sunny'){ ctx.fillStyle='rgba(255,200,100,0.1)'; ctx.fillRect(0,0,800,900); let g=ctx.createRadialGradient(800,0,50,800,0,600); g.addColorStop(0,'rgba(255,255,200,0.5)'); g.addColorStop(1,'rgba(255,200,100,0)'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(800,0,600,0,Math.PI*2); ctx.fill(); petals.forEach(p=>{p.update();p.draw(ctx);}); }
-            else if(cWea==='rainy'){ ctx.fillStyle=`rgba(40,45,62,${eType==='bad'?0.5:0.3})`; ctx.fillRect(0,0,800,900); raindrops.forEach(r=>{r.update();r.draw(ctx);}); }
-            else if(cWea==='snowy'){ ctx.fillStyle='rgba(15,22,42,0.3)'; ctx.fillRect(0,0,800,900); snowflakes.forEach(s=>{s.update();s.draw(ctx);}); }
-            else { ctx.fillStyle=`rgba(70,75,88,${eType==='normal'?0.5:0.4})`; ctx.fillRect(0,0,800,900); ctx.fillStyle='rgba(230,230,230,0.05)'; ctx.beginPath(); ctx.arc(time*20%1000-100,100,150,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(time*15%1000+200,50,200,0,Math.PI*2); ctx.fill(); }
-        }
-
-        if(state===STATES.END_ANIM && eType==='bad') { ctx.fillStyle='rgba(255,230,230,0.15)'; ctx.fillRect(0,0,800,900); }
-        if(state===STATES.END_ANIM && eType==='good' && Math.random()<0.15) pts.push(new Conf(400+(Math.random()-0.5)*400,50));
-
-        ctx.strokeStyle='#8b6b4a'; ctx.lineWidth=4; ctx.strokeRect(20,20,760,860);
-
-        if(state!==STATES.START && state!==STATES.CREATION && state!==STATES.END && state!==STATES.END_ANIM && state!==STATES.MAP) { drawDPnl(); drawSPnl(); }
-
-        if(state===STATES.START) {
-            ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,800,900); 
-            ctx.fillStyle='#f4ebd0'; ctx.font='bold 56px Kaiti'; ctx.textAlign='center'; ctx.shadowColor='#000'; ctx.shadowBlur=15; ctx.fillText("汴京娘子調養記",400,250); 
-            ctx.font='28px Kaiti'; ctx.fillText("— 終極衛教大作戰 (精美畫質版) —",400,320); ctx.shadowBlur=0;
-            drawBtn({x:300,y:450,w:200,h:60},"開始新局",true); if(hasS()) drawBtn({x:300,y:550,w:200,h:60},"延續前緣",true);
-        } else if(state===STATES.CREATION) {
-            ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillRect(0,0,800,900); 
-            ctx.fillStyle='#ffdd66'; ctx.font='bold 40px Kaiti'; ctx.textAlign='center'; ctx.fillText("【主母設定】",400,150);
-            
-            ctx.fillStyle='#f4ebd0'; ctx.font='28px Kaiti'; 
-            ctx.fillText("名諱",200,300); drawBtn(UI.nL,"<",true); drawBtn(UI.nR,">",true); ctx.fillStyle='#cdae77'; ctx.font='32px Kaiti'; ctx.fillText(NList[selN],400,300);
-            
-            ctx.fillStyle='#f4ebd0'; ctx.font='28px Kaiti'; 
-            ctx.fillText("出身",200,400); drawBtn(UI.rL,"<",true); drawBtn(UI.rR,">",true); ctx.fillStyle='#cdae77'; ctx.font='32px Kaiti'; ctx.fillText(BList[selB],400,400);
-            
-            ctx.fillStyle='#f4ebd0'; ctx.font='28px Kaiti'; 
-            ctx.fillText("容貌",200,500); drawBtn(UI.fL,"<",true); drawBtn(UI.fR,">",true); ctx.fillStyle='#cdae77'; ctx.font='32px Kaiti'; ctx.fillText(faceNames[selF],400,500);
-            
-            ctx.fillStyle='#f4ebd0'; ctx.font='28px Kaiti'; 
-            ctx.fillText("服飾",200,600); drawBtn(UI.cL,"<",true); drawBtn(UI.cR,">",true); ctx.fillStyle='#cdae77'; ctx.font='32px Kaiti'; ctx.fillText(clothNames[selC],400,600);
-
-            drawBtn(UI.cfBtn,"踏入侯府",true);
-            
-            let img = LImgs[`player_${FList[selF]}_${CList[selC]}`]?.normal; if(img) { ctx.save(); ctx.translate(650,450); ctx.scale(1,1.3+Math.sin(time*2.5)*0.015); ctx.drawImage(img,-110,-140,220,280); ctx.restore(); }
-        } else if(state===STATES.DAY_TRANSITION) {
-            ctx.fillStyle='rgba(0,0,0,0.85)'; ctx.fillRect(0,0,800,900); 
-            ctx.fillStyle='#cdae77'; ctx.font='bold 50px Kaiti'; ctx.textAlign='center'; ctx.fillText(`產後第 ${day} 天`,400,350);
-            ctx.fillStyle='#f4ebd0'; ctx.font='26px Kaiti'; ctx.textAlign='left'; ctx.textBaseline='top'; 
-            let lines = getLines(ctx, dData.e, 500); for(let i=0;i<lines.length;i++) ctx.fillText(lines[i],150,450+i*40); ctx.textBaseline='alphabetic';
-            ctx.globalAlpha=(Math.sin(time*5)+1)/2*0.5+0.5; ctx.fillStyle='#cdae77'; ctx.font='22px Kaiti'; ctx.textAlign='center'; ctx.fillText("▼ 點擊開始調理 ▼",400,750); ctx.globalAlpha=1.0;
-        } else if(state===STATES.MAP) {
-            ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,800,900); drawDPnl(); drawSPnl();
-            ctx.fillStyle='#ffdd66'; ctx.font='bold 40px Kaiti'; ctx.textAlign='center'; ctx.fillText("【侯府地圖探索】",400,300); 
-            ctx.fillStyle='#f4ebd0'; ctx.font='26px Kaiti'; ctx.fillText("今日趁著閒暇，夫人打算去哪裡走走？",400,360);
-            drawMap(UI.maps.maid, 'maid'); drawMap(UI.maps.chef, 'chef'); drawMap(UI.maps.doc, 'doctor'); drawMap(UI.maps.med, 'medic');
-        } else if(state===STATES.STORY || state===STATES.QUESTION || state===STATES.FEEDBACK) {
-            if(state===STATES.STORY) { 
-                let img = currentStage.img || 'baby';
-                if(img === 'player') img = P.id;
-                drawChar(img, rep(currentStage.char || '系統'), 'normal', Math.sin(time*3)*5);
-                drawBox("【劇情與衛教】", rep(currentStage.s[storyLine])); 
-            }
-            else if(state===STATES.QUESTION) { 
-                let img = currentStage.img || 'baby';
-                if(img === 'player') img = P.id;
-                drawChar(img, rep(currentStage.char || '系統'), 'normal', Math.sin(time*3)*5);
-                drawBox(currentStage.q.includes("支線")?"【互動抉擇】":"【測驗：請夫人抉擇】", rep(currentStage.q), false); 
-                currentStage.opts.forEach((o,i)=>drawBtn(UI.btns[i], "選項 "+(i+1)+"："+rep(o.t))); 
-            }
-            else { 
-                let img = currentStage.img || 'baby';
-                if(img === 'player') img = P.id;
-                let ex = currentExpr === 'angry' ? 'normal' : currentExpr; // 防驚嚇處理
-                drawChar(img, rep(currentStage.char || '系統'), ex, Math.sin(time*3)*5);
-                drawBox("【情境發展】", rep(fbText)); 
-            }
-        } else if(state===STATES.END_ANIM) {
-            let sc=endScenes[endIdx], bY=Math.sin(time*3)*5, cN=sc.role==='baby'?'內心獨白':(P.aff[sc.role]?P.aff[sc.role].n:"未知");
-            let img = sc.role; if(img === 'player') img = P.id;
-            drawChar(img, cN, sc.expr, bY);
-            drawBox(sc.n, sc.t);
-        } else if(state===STATES.END) {
-            let og=ctx.createLinearGradient(0,0,0,900); og.addColorStop(0,'rgba(0,0,0,0.55)'); og.addColorStop(0.5,'rgba(0,0,0,0.75)'); og.addColorStop(1,'rgba(0,0,0,0.95)'); ctx.fillStyle=og; ctx.fillRect(0,0,800,900);
-            ctx.fillStyle=eColor; ctx.font='bold 48px Kaiti'; ctx.textAlign='center'; ctx.shadowColor='#000'; ctx.shadowBlur=15; ctx.fillText(eTitle,400,250);
-            ctx.fillStyle='#fff'; ctx.font='26px Kaiti'; ctx.fillText("這段月子時光已落下帷幕...",400,330); ctx.shadowBlur=0;
-            ctx.textAlign='left'; ctx.textBaseline='top'; 
-            let lines = getLines(ctx, rep(endScenes[endScenes.length-1].t), 560);
-            for(let i=0;i<lines.length;i++) ctx.fillText(lines[i],120,400+i*40); ctx.textBaseline='alphabetic';
-            drawBtn({x:300,y:750,w:200,h:60},"重新挑戰",true);
-        }
-
-        pts=pts.filter(p=>p.l>0); pts.forEach(p=>{p.update();p.draw(ctx);});
-        sfxs=sfxs.filter(e=>e.l>0); sfxs.forEach(e=>{e.update();e.draw(ctx);});
-        fTexts=fTexts.filter(t=>t.l>0); fTexts.forEach(t=>{t.update();t.draw(ctx);});
-        if(flash.a>0){ctx.fillStyle=flash.c; ctx.globalAlpha=flash.a; ctx.fillRect(0,0,800,900); ctx.globalAlpha=1.0; flash.a*=0.85;}
-        ctx.restore(); requestAnimationFrame(gameLoop);
-    }
-
-    function updateMouse(cx, cy) {
-        let r=canvas.getBoundingClientRect(); 
-        mouse.x=(cx-r.left)*(800/r.width); 
-        mouse.y=(cy-r.top)*(900/r.height);
-    }
-
+    // ==========================================
+    // 6. UI 與觸控邏輯
+    // ==========================================
     function handleClick() {
         if(state===STATES.START) {
             if(isHov({x:300,y:450,w:200,h:60})) { SE.click(); state=STATES.CREATION; }
-            if(hasS()&&isHov({x:300,y:550,w:200,h:60})) { SE.click(); if(load()) return; }
+            if(hasS()&&isHov({x:300,y:550,w:200,h:60})) { SE.click(); if(loadGame()) return; }
         } else if(state===STATES.CREATION) {
             if(isHov(UI.nL)){SE.click();selN=(selN-1+NList.length)%NList.length;} if(isHov(UI.nR)){SE.click();selN=(selN+1)%NList.length;}
             if(isHov(UI.rL)){SE.click();selB=(selB-1+BList.length)%BList.length;} if(isHov(UI.rR)){SE.click();selB=(selB+1)%BList.length;}
@@ -577,7 +704,7 @@
         } else if(state===STATES.FEEDBACK) {
             SE.click();
             if(isEarlyEnd){ genEnd(); state=STATES.END_ANIM; shake=25; flash.a=0.5; flash.c='#f00'; }
-            else { day++; storyLine=0; currentExpr='normal'; save(); if(day>7){genEnd();state=STATES.END_ANIM;}else state=STATES.DAY_TRANSITION; }
+            else { day++; storyLine=0; currentExpr='normal'; saveGame(); if(day>7){genEnd();state=STATES.END_ANIM;}else state=STATES.DAY_TRANSITION; }
         } else if(state===STATES.END_ANIM) {
             SE.click(); endIdx++;
             if(endIdx>=endScenes.length) { state=STATES.END; if(eType==='good'){flash.a=0.6;flash.c='#fff';} }
@@ -587,70 +714,12 @@
         }
     }
 
-    canvas.addEventListener('mousedown', e => {
-        SE.init();
-        updateMouse(e.clientX, e.clientY);
-        handleClick();
-    });
-    
-    canvas.addEventListener('touchstart', e => {
-        e.preventDefault();
-        SE.init();
-        updateMouse(e.touches[0].clientX, e.touches[0].clientY);
-        handleClick();
-    }, {passive: false});
-    
-    canvas.addEventListener('mousemove', e => {
-        updateMouse(e.clientX, e.clientY);
-    });
-    
+    canvas.addEventListener('mousedown', e => { SE.init(); updateMouse(e.clientX, e.clientY); handleClick(); });
+    canvas.addEventListener('touchstart', e => { e.preventDefault(); SE.init(); updateMouse(e.touches[0].clientX, e.touches[0].clientY); handleClick(); }, {passive: false});
+    canvas.addEventListener('mousemove', e => updateMouse(e.clientX, e.clientY));
     canvas.addEventListener('selectstart', e => e.preventDefault());
+    
     requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
-
-```
-
-You are giving me the same code repeatedly, which tells me the problem isn't the missing codes but that the character limit. Could you make the code compact as possible? Don't make it to easy to comprehend. Also, if there are some logic that requires tons of code like ending etc..., trim them. Delete anything that is useless. Only leave what is most essential. Use external link if possible for the art but make sure they exist, if not find an alternative or keep it. I don't care how it is done, fix it! Make sure I get a good score for my homework presentation. Oh, wait let me provide my homework instructions. Follow the presentation instructions to ensure a good score! Make sure it adheres to "產科護理學生之簡報作業".
-Oh btw don't provide the code yet, simply output what you are thinking. Only generate the response once.
-
-I also found an error with `wuyu123/:48 The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page.` Can you fix this too? Look into how games solves this. Think about it in the response.以下是我的思考過程與後續行動計畫：
-
-### 1. 核心問題診斷與分析
-* **使用者反覆遇到 `ReferenceError` 或截斷問題**：使用者的提示點出了關鍵盲點——不是單純的變數未宣告，而是因為「整體程式碼體積過大」，導致 LLM 輸出時達到 Token/字元上限，硬生生把結尾截斷了。這就是為什麼每次到最後 `<script>` 的尾巴都會少掉括號或變數。
-* **使用者的解決方案要求**：
-    * **極致壓縮**：程式碼必須盡可能短，不必易讀。刪除冗長邏輯，刪減繁雜的結局判斷。
-    * **圖像處理**：如果可以，使用外部圖片連結代替幾何圖形 (SVG字串)。但因為沒有穩定的免費/免版權古風圖床，保險起見，我會**精簡 SVG 繪圖程式碼**，把多餘的光影、漸層細節拿掉，用最精簡的 Path 呈現。
-    * **解決 `AudioContext` 報錯**：這是經典的瀏覽器 Autoplay 限制。瀏覽器規定 `AudioContext` 必須在「使用者的第一次主動互動（如 `click`、`touchstart`）」後才能啟動。目前的實作可能在 `mousemove` 或是全域變數初始化時就提早觸發了。遊戲業界的解法通常是在「開始畫面」放一個「點擊開始 (Click to Start)」按鈕，在那一瞬間才 `new AudioContext()` 並 `resume()`。
-    * **符合「產科護理學生之簡報作業」評分標準**：
-        * **內容正確 (30%)**：必須扣緊產科護理實證（如母乳哺育、含乳姿勢、發奶/退奶食物、黃疸、產後接觸）。
-        * **個別性 (50%)**：針對 41 歲、產後第二天、有貧血、甲狀腺癌、慢性高血壓的特徵進行衛教。
-        * **創意 (20%)**：RPG 遊戲互動本身就是極大的創意加分項。
-
-### 2. 具體修改策略 (針對 LLM 輸出長度與程式碼壓縮)
-
-#### A. 衛教內容與劇情精簡 (對應「產科護理作業」)
-我要把原本又長又多的題庫大幅度縮減，留下最精華、最能反映個案特徵（高血壓、甲狀腺癌、貧血、41歲、產後第二天）的題目，以確保「個別性 (50%)」與「內容正確 (30%)」的高分。
-* *保留核心題*：
-    1.  高齡/高血壓飲食（麻油雞/十全大補湯 vs 清淡魚湯）。
-    2.  慢性病服藥（甲狀腺與高血壓藥物不可停）。
-    3.  初乳迷思與含乳姿勢（產婦最常見問題）。
-    4.  產後姿勢性低血壓（針對貧血）。
-* *刪除*：過於發散的題目（如B肝、副食品、職場擠奶），這些對「產後第二天」來說太遠了。
-* 字串陣列直接合併，刪除所有不必要的對話廢話。
-
-#### B. 結局系統極簡化
-原本的 `generateEndingScenes` 有好幾百行。
-* *改為*：只看 `knowledgeScore`。大於 X 就跳 Good End，小於 X 就 Bad End。直接顯示一張結算卡片，不要一幕一幕的過場動畫。這樣可以省下幾百行程式碼與邏輯。
-
-#### C. `AudioContext` 錯誤徹底解決
-* 將 `audioCtx` 的宣告設為 `let audioCtx;` (不初始化)。
-* 在 `canvas.addEventListener('click', ...)` 或 `touchstart` 的事件回呼函數中，加入：
-    ```javascript
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
