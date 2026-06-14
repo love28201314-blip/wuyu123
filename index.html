@@ -75,6 +75,17 @@
     let bloomIntensity = 0;
     let dustParticles = [];
 
+    // 玩家狀態與好感度系統
+    let player = { 
+        knowledgeScore: 50,
+        affections: {
+            maid: { name: "丫鬟 春桃", current: 50, target: 50, max: 100, color: "#ff8da1", status: "平淡" },
+            chef: { name: "膳房 總管", current: 50, target: 50, max: 100, color: "#d29c72", status: "平淡" },
+            doctor: { name: "太醫 張大人", current: 50, target: 50, max: 100, color: "#6ca07e", status: "平淡" },
+            medic: { name: "醫女 蘇氏", current: 50, target: 50, max: 100, color: "#82c0d9", status: "平淡" }
+        }
+    };
+
     /**
      * 高階純數算 Live2D 渲染引擎
      * 完全不需要圖片，透過貝茲曲線與流體運算即時生成 AAA 級動態角色
@@ -513,8 +524,6 @@
 
     for(let i=0; i<50; i++) dustParticles.push(new DustParticle());
 
-    let player = { knowledgeScore: 50 };
-
     const originStages = {
         '名門嫡女': {
             character: "太醫 張大人",
@@ -524,9 +533,9 @@
             ],
             question: "【嫡女專屬支線】面對賞賜與太醫的勸告，您該如何應對？",
             options: [
-                { text: "婉拒並請太醫作證會退奶，改請賜黑豆豬腳湯。", feedback: "【太醫 撫鬚】夫人睿智！既保全了顏面，又守住了小少爺的糧倉。", val: 30, expr: 'happy' },
-                { text: "為了面子硬著頭皮喝下去。", feedback: "【太醫 擔憂】這...夫人，您喝了之後當晚奶水疏少，下次可得留心了。", val: -25, expr: 'shocked' },
-                { text: "有些不知所措，不知道該聽誰的。", feedback: "【太醫 溫言勸阻】夫人莫慌。這參湯咱們婉言推辭即可。", val: -15, expr: 'normal' }
+                { text: "婉拒並請太醫作證會退奶，改請賜黑豆豬腳湯。", feedback: "【太醫 撫鬚】夫人睿智！既保全了顏面，又守住了小少爺的糧倉。", val: 30, expr: 'happy', affects: [{char: 'doctor', val: 30, status: '欣慰'}] },
+                { text: "為了面子硬著頭皮喝下去。", feedback: "【太醫 擔憂】這...夫人，您喝了之後當晚奶水疏少，下次可得留心了。", val: -25, expr: 'shocked', affects: [{char: 'doctor', val: -25, status: '擔憂'}] },
+                { text: "有些不知所措，不知道該聽誰的。", feedback: "【太醫 溫言勸阻】夫人莫慌。這參湯咱們婉言推辭即可。", val: -15, expr: 'normal', affects: [{char: 'doctor', val: -15, status: '關切'}] }
             ]
         }
     };
@@ -540,9 +549,9 @@
         ],
         question: "【起始抉擇】望著懷中柔嫩的孩兒，您決定如何開啟這趟旅程？",
         options: [
-            { text: "學習現代科學親餵法，與下人們攜手配合。", feedback: "【蘇醫女 欣慰】夫人做得極好！皮膚貼皮膚，激發本能！", val: 25, expr: 'happy' },
-            { text: "怕寶寶著涼，用厚厚的蠶絲包巾包得緊緊的。", feedback: "【蘇醫女 提醒】包得太厚無法達到『肌膚接觸』，會阻礙本能喔。", val: -15, expr: 'shocked' },
-            { text: "太累了，決定先推去嬰兒室交給其他人。", feedback: "【蘇醫女 勸解】若能撐過黃金接觸期，之後泌乳會更順暢，慢慢來。", val: -20, expr: 'normal' }
+            { text: "學習現代科學親餵法，與下人們攜手配合。", feedback: "【蘇醫女 欣慰】夫人做得極好！皮膚貼皮膚，激發本能！", val: 25, expr: 'happy', affects: [{char: 'medic', val: 25, status: '崇敬'}] },
+            { text: "怕寶寶著涼，用厚厚的蠶絲包巾包得緊緊的。", feedback: "【蘇醫女 提醒】包得太厚無法達到『肌膚接觸』，會阻礙本能喔。", val: -15, expr: 'shocked', affects: [{char: 'medic', val: -15, status: '擔憂'}] },
+            { text: "太累了，決定先推去嬰兒室交給其他人。", feedback: "【蘇醫女 勸解】若能撐過黃金接觸期，之後泌乳會更順暢，慢慢來。", val: -20, expr: 'normal', affects: [{char: 'medic', val: -20, status: '關切'}] }
         ]
     };
 
@@ -567,13 +576,36 @@
         mainCharacter.setEmotion(opt.expr);
         selectedOptionFeedback = opt.feedback;
         
-        // 浮動文字特效
-        let color = opt.val > 0 ? '#4caf50' : '#e74c3c';
-        floatingTexts.push(new FloatingText(400, 300, `${opt.val > 0 ? '+' : ''}${opt.val} 調養知識`, color));
+        let offsetY = 250;
+        let hasPositive = false;
+        let hasNegative = false;
+
+        // 好感度處理與浮動文字
+        if (opt.affects) {
+            opt.affects.forEach((r) => {
+                let targetChar = player.affections[r.char];
+                if (targetChar) {
+                    targetChar.target = Math.max(0, Math.min(targetChar.max, targetChar.target + r.val)); 
+                    targetChar.status = r.status;
+                    
+                    let color = r.val >= 0 ? targetChar.color : "#e74c3c";
+                    let sign = r.val >= 0 ? "+" : "";
+                    floatingTexts.push(new FloatingText(400, offsetY, `${targetChar.name} ${sign}${r.val}`, color));
+                    offsetY -= 40;
+
+                    if(r.val > 0) hasPositive = true;
+                    else hasNegative = true;
+                }
+            });
+        }
         
-        // 相機震動
-        if (opt.val < 0) cameraShake.amount = 10;
-        else bloomIntensity = 1.0; // 正向回饋閃光
+        // 知識分數浮動文字
+        let kColor = opt.val > 0 ? '#4caf50' : '#e74c3c';
+        floatingTexts.push(new FloatingText(400, offsetY, `${opt.val > 0 ? '+' : ''}${opt.val} 調養知識`, kColor));
+        
+        // 特效與相機震動
+        if (opt.val > 0 || hasPositive) bloomIntensity = 1.0; 
+        if (opt.val < 0 || hasNegative) cameraShake.amount = 10;
         
         currentState = STATES.FEEDBACK;
     }
@@ -618,6 +650,71 @@
         }
         ctx.fillText(line, x, startY);
         ctx.shadowBlur = 0;
+    }
+
+    function drawDatePanel(ctx) {
+        drawGlassPanel(ctx, 20, 20, 250, 95);
+        ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
+        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 20px Kaiti'; ctx.textAlign = 'left';
+        ctx.fillText(`【大宋 宣和元年】`, 35, 55);
+        ctx.fillStyle = '#e0e0e0'; ctx.font = '18px Kaiti';
+        ctx.fillText(`產後第 ${currentDay} 天`, 45, 85);
+        ctx.shadowBlur = 0;
+    }
+
+    function drawStatsPanel(ctx) {
+        let panelX = 530;
+        let panelY = 20;
+        let panelW = 250;
+        let panelH = 240;
+        
+        drawGlassPanel(ctx, panelX, panelY, panelW, panelH);
+        
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = '#d4af37';
+        ctx.font = 'bold 20px Kaiti';
+        ctx.textAlign = 'left';
+        ctx.fillText("【後宅人際關係】", panelX + 15, panelY + 35);
+        ctx.shadowBlur = 0;
+
+        let startY = panelY + 70;
+        for (const key in player.affections) {
+            let stat = player.affections[key];
+            // 平滑動畫
+            stat.current += (stat.target - stat.current) * 10 * dt;
+            
+            let statusColor = '#e0e0e0';
+            if(stat.target <= 20) statusColor = '#e74c3c'; 
+            else if(['嫌隙', '心寒', '厭惡', '覺得荒唐', '心灰意冷', '瑟瑟發抖', '氣急敗壞', '慌張', '恐懼', '強烈厭惡', '疑惑', '擔憂'].includes(stat.status)) statusColor = '#e74c3c';
+            else if(['崇拜', '崇敬', '死心塌地', '情同姐妹', '醫者父母心', '敬畏', '知音', '安心', '欣慰', '敬佩'].includes(stat.status)) statusColor = '#4caf50';
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '16px Kaiti';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${stat.name}`, panelX + 20, startY);
+            
+            ctx.fillStyle = statusColor;
+            ctx.textAlign = 'right';
+            ctx.fillText(`[${stat.status}]`, panelX + panelW - 20, startY);
+            
+            // 畫進度條底框
+            ctx.fillStyle = 'rgba(255,255,255,0.1)';
+            ctx.beginPath(); ctx.roundRect(panelX + 20, startY + 10, panelW - 40, 6, 3); ctx.fill();
+            
+            // 畫進度條
+            ctx.fillStyle = stat.color; 
+            let barWidth = Math.max(0, (stat.current / stat.max) * (panelW - 40));
+            ctx.beginPath(); ctx.roundRect(panelX + 20, startY + 10, barWidth, 6, 3); ctx.fill(); 
+            
+            // 光暈
+            ctx.shadowColor = stat.color;
+            ctx.shadowBlur = 10;
+            ctx.beginPath(); ctx.roundRect(panelX + 20, startY + 10, barWidth, 6, 3); ctx.fill(); 
+            ctx.shadowBlur = 0;
+
+            startY += 45;
+        }
     }
 
     function isHovered(btn) {
@@ -713,6 +810,9 @@
             drawButton(ctx, {x: 300, y: 600, w: 200, h: 60}, "進入侯府");
         }
         else if (currentState === STATES.STORY) {
+            drawDatePanel(ctx);
+            drawStatsPanel(ctx);
+
             let stage = currentStage || introStage;
             let text = stage.story[currentStoryLine];
             
@@ -727,6 +827,9 @@
             ctx.globalAlpha = 1.0;
         }
         else if (currentState === STATES.QUESTION) {
+            drawDatePanel(ctx);
+            drawStatsPanel(ctx);
+
             let stage = currentStage || introStage;
             
             drawGlassPanel(ctx, 50, 500, 700, 120);
@@ -737,6 +840,9 @@
             });
         }
         else if (currentState === STATES.FEEDBACK) {
+            drawDatePanel(ctx);
+            drawStatsPanel(ctx);
+
             drawGlassPanel(ctx, 50, 650, 700, 200);
             drawCinematicText(ctx, "【調理結果】", 80, 690, 640, true);
             drawCinematicText(ctx, selectedOptionFeedback, 80, 730, 640);
@@ -817,6 +923,14 @@
             if (isHovered({x: 300, y: 600, w: 200, h: 60})) {
                 currentDay = 1;
                 player.knowledgeScore = 50;
+                
+                // 重置好感度
+                for(let key in player.affections) {
+                    player.affections[key].target = 50;
+                    player.affections[key].current = 50;
+                    player.affections[key].status = "平淡";
+                }
+
                 currentStage = introStage;
                 currentStoryLine = 0;
                 mainCharacter.setEmotion('normal');
