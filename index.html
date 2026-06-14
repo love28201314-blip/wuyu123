@@ -57,9 +57,9 @@
     window.addEventListener('resize', resize);
     resize();
 
-    // 遊戲狀態機升級
-    const STATES = { START: 0, DAY_TRANSITION: 1, FREE_ACTION: 2, ACTION_RESULT: 3, RANDOM_EVENT: 4, HIDDEN_EVENT: 5, INTERACT_CHOICE: 6, STORY: 7, QUESTION: 8, FEEDBACK: 9, END: 10 };
-    let currentState = STATES.START;
+    // 遊戲狀態機
+    const STATES = { START: 0, DAY_TRANSITION: 1, FREE_ACTION: 2, ACTION_RESULT: 3, RANDOM_EVENT: 4, HIDDEN_EVENT: 5, INTERACT_CHOICE: 6, STORY: 7, QUESTION: 8, FEEDBACK: 9, END: 10, LOADING: 11 };
+    let currentState = STATES.LOADING; // 初始狀態改為載入中
     let currentDay = 1;
     let currentStage = null;
     let currentStoryLine = 0;
@@ -74,7 +74,7 @@
     let bloomColor = '255,255,255';
     let globalAlpha = 1; 
     
-    // 玩家屬性系統升級
+    // 玩家屬性系統
     let player = { 
         knowledge: 50,    // 智慧
         health: 80,       // 體力
@@ -114,95 +114,204 @@
         return array;
     }
 
-    const allQuestionPools = {
-        'maid': [
-            { character: "丫鬟 春桃",
-              story: ["「夫人...初乳又黃又濃，量這麼少，這怎麼夠小少爺塞牙縫呀？」", "【調養小記】：初乳量雖少但富含抗體與生長因子。新生兒胃僅有彈珠大小（5-7ml），初乳絕對足夠。"],
-              question: "面對春桃的疑慮，夫人該如何回應？",
-              options: [
-                  { text: "初乳是抗體精華，這點量足夠了。", feedback: "【春桃 恍然大悟】這金黃色的初乳竟是給小少爺最好的保護！", val: 20, expr: 'happy', affects: [{char: 'maid', val: 20}] },
-                  { text: "妳說得對，快去熬點濃米湯來給少爺墊墊肚子。", feedback: "【春桃 慌張】可是蘇醫女說新生兒腸胃弱不能喝米湯啊...", val: -15, expr: 'shocked', affects: [{char: 'maid', val: -15}] },
-                  { text: "聽得心煩意亂，自責是不是自己身體不好。", feedback: "【春桃 趕忙安慰】夫人您千萬別焦慮，奴婢去請教蘇醫女。", val: -10, expr: 'normal', affects: [{char: 'maid', val: -10}] }
-            ]},
-            { character: "丫鬟 春桃",
-              story: ["「夫人，母奶看起來好稀，小主子真的有吃飽嗎？」", "【調養小記】：判斷吃飽最客觀的指標是尿布量。出生第四天後，一天有6片以上沉甸甸的濕尿布即充足。"],
-              question: "判斷寶寶有沒有吃飽，最客觀科學的指標是？",
-              options: [
-                  { text: "觀察尿布。一天有 6 片以上沉甸甸濕尿布便是有吃飽了。", feedback: "【春桃 恍然大悟】原來如此！看尿量最準確，奴婢去記尿布！", val: 20, expr: 'happy', affects: [{char: 'maid', val: 20}] },
-                  { text: "只要他一哭就是沒吃飽，立刻給他補配方奶！", feedback: "【春桃 擔憂】夫人...過度補奶反而會讓您的母乳分泌變少喔。", val: -15, expr: 'shocked', affects: [{char: 'maid', val: -15}] },
-                  { text: "感到很沮喪，懷疑自己的奶水沒有營養。", feedback: "【春桃 輕聲安慰】蘇醫女說親餵量絕對足夠，您別給自己壓力。", val: -10, expr: 'normal', affects: [{char: 'maid', val: -10}] }
-            ]}
-        ],
-        'chef': [
-            { character: "膳房 總管",
-              story: ["「夫人！這十全大補麻油豬腳湯上面浮著厚油，最是滋補發奶！」", "【調養小記】：產後發奶應多攝取水分與清淡蛋白質。過於油膩的濃湯容易導致乳汁脂肪過高，造成乳腺阻塞。"],
-              question: "為了順暢發奶且不塞奶，夫人該如何選擇？",
-              options: [
-                  { text: "撇去浮油，平日多喝清淡的魚湯與水分。", feedback: "【總管 敬佩】清淡的高蛋白湯水好吸收又發奶，夫人深諳養生之道！", val: 20, expr: 'happy', affects: [{char: 'chef', val: 20}] },
-                  { text: "為了多產點奶，硬著頭皮把這整鍋油膩濃湯喝光。", feedback: "【總管 擔憂】太過油膩容易讓乳汁脂肪過高，反倒容易塞奶。", val: -15, expr: 'shocked', affects: [{char: 'chef', val: -15}] },
-                  { text: "覺得胃口全無，什麼湯水都不想喝，空腹一整天。", feedback: "【總管 慌忙規勸】夫人產後身子虛可不能不吃東西，奴才去熬小米粥。", val: -10, expr: 'normal', affects: [{char: 'chef', val: -10}] }
-            ]},
-            { character: "膳房 總管",
-              story: ["「夫人，這是奴才為您準備的『韭菜炒雞蛋』配『人參溫補茶』！」", "【調養小記】：哺乳期應避開退奶三大地雷食物：人參、韭菜、大麥芽水。"],
-              question: "看到這份點心，身為親餵媽媽的您該如何指示？",
-              options: [
-                  { text: "婉拒這兩樣食材，告知容易退奶，換成黑豆水。", feedback: "【總管 驚出冷汗】奴才竟不知這兩樣是退奶大忌！多虧夫人博學！", val: 20, expr: 'happy', affects: [{char: 'chef', val: 20}] },
-                  { text: "覺得高檔食材不能浪費，全部吃光光補身體。", feedback: "【總管 困惑】奇怪...夫人吃完後，怎麼晚上的奶水量明顯變少了？", val: -20, expr: 'shocked', affects: [{char: 'chef', val: -20}] },
-                  { text: "感到極度無奈與疲憊，不知道該怎麼跟膳房溝通。", feedback: "【總管 柔聲寬慰】產後身心勞累奴才明白。奴才去請教正確的膳食。", val: -10, expr: 'normal', affects: [{char: 'chef', val: -10}] }
-            ]}
-        ],
-        'doctor': [
-            { character: "太醫 張大人",
-              story: ["「夫人，小主子若含乳姿勢不對，只含住乳頭會導致微血管破損流血。」", "【調養小記】：正確含乳應讓寶寶嘴巴張大，含住「大部分的乳暈」，下巴貼緊乳房。"],
-              question: "為避免乳頭破損，正確的含乳姿勢應該是？",
-              options: [
-                  { text: "讓寶寶嘴巴張大，下巴緊貼乳房，含住大部分乳暈。", feedback: "【太醫 點頭稱是】大口含住乳暈才能正確擠壓乳腺，親餵才不會痛！", val: 20, expr: 'happy', affects: [{char: 'doctor', val: 20}] },
-                  { text: "做母親的忍一忍就過去了，只要寶寶含住前端用力吸就好。", feedback: "【太醫 搖頭嘆息】萬萬不可強忍！只含乳頭會導致嚴重破損與發炎啊。", val: -15, expr: 'shocked', affects: [{char: 'doctor', val: -15}] },
-                  { text: "破損太痛了，內心恐懼，決定徹底放棄哺乳改餵水。", feedback: "【太醫 柔聲規勸】微臣這就讓醫女來協助您調整姿勢，切莫沮喪。", val: -10, expr: 'normal', affects: [{char: 'doctor', val: -10}] }
-            ]},
-            { character: "太醫 張大人",
-              story: ["「夫人這是『生理性脹奶』了，切記溫和處理，不可強行推擠硬揉。」", "【調養小記】：生理性脹奶時，餵奶「前」可微溫敷，餵奶「後」冷敷舒緩紅腫熱痛。"],
-              question: "面對乳房生理性脹痛，夫人該如何溫和處置？",
-              options: [
-                  { text: "餵奶前微溫敷，餵奶後冷敷舒緩，並多讓寶寶親餵。", feedback: "【太醫 撫鬚讚賞】孺子可教！冷熱敷交替能有效舒緩脹痛！", val: 20, expr: 'happy', affects: [{char: 'doctor', val: 20}] },
-                  { text: "命丫鬟用最大的手勁，死命揉捏按壓直到推散為止。", feedback: "【太醫 驚呼阻止】使不得！強行硬推會導致嚴重的乳腺發炎！", val: -20, expr: 'shocked', affects: [{char: 'doctor', val: -20}] },
-                  { text: "痛到掉眼淚，完全不想碰乳房，任由它越來越脹。", feedback: "【太醫 體諒安慰】微臣命醫女用高麗菜葉為您冷敷排空，咱們溫和處理。", val: -10, expr: 'normal', affects: [{char: 'doctor', val: -10}] }
-            ]}
-        ],
-        'medic': [
-            { character: "醫女 蘇氏",
-              story: ["「夫人，小主子轉頭舔唇、把小手放進嘴裡，這是『尋乳信號』了。」", "【調養小記】：舔唇、吃手是飢餓的早期信號，若等到嚎啕大哭已是過度飢餓。"],
-              question: "看到寶寶的早期尋乳信號，夫人該怎麼做？",
-              options: [
-                  { text: "趁他情緒安穩、尚未大哭前，趕緊抱過來依需求親餵。", feedback: "【蘇醫女 欣喜】夫人抓時機真準！這時餵奶寶寶情緒穩定，含乳最順利！", val: 20, expr: 'happy', affects: [{char: 'medic', val: 20}] },
-                  { text: "嚴格遵守長輩定時四小時餵一次的規矩，沒到先別理他。", feedback: "【蘇醫女 柔聲提醒】等他哭鬧厲害時，往往就因為太餓而不好含乳了呢。", val: -15, expr: 'shocked', affects: [{char: 'medic', val: -15}] },
-                  { text: "覺得吃手是不乖的壞習慣，拿手套把他的小手綁起來。", feedback: "【蘇醫女 趕忙解釋】吃手是新生兒天生的尋乳反射，他在告訴您想喝奶了。", val: -10, expr: 'normal', affects: [{char: 'medic', val: -10}] }
-            ]},
-            { character: "醫女 蘇氏",
-              story: ["「夫人，為防寶寶產生『乳頭混淆』，親餵尚未順暢前建議勿用安撫奶嘴。」", "【調養小記】：建立親餵默契的前幾週，媽媽的乳房是最好的安撫工具。"],
-              question: "面對剛出生幾天寶寶的哭鬧，正確的安撫首選是？",
-              options: [
-                  { text: "多與寶寶進行肌膚接觸，或是直接抱起來親餵安撫。", feedback: "【蘇醫女 欣喜】非常正確！媽媽的乳房是最好的安撫，最能刺激泌乳！", val: 20, expr: 'happy', affects: [{char: 'medic', val: 20}] },
-                  { text: "為了圖省事，只要寶寶一哭就立刻塞進安撫奶嘴。", feedback: "【蘇醫女 溫柔提醒】過早用奶嘴容易讓他混淆，之後可能會抗拒親餵喔。", val: -15, expr: 'shocked', affects: [{char: 'medic', val: -15}] },
-                  { text: "不知所措，覺得自己照顧不好寶寶，感到焦慮挫折。", feedback: "【蘇醫女 給予擁抱】咱們一塊兒拍嗝、抱抱他，寶寶能感受到您的愛的。", val: -5, expr: 'normal', affects: [{char: 'medic', val: -5}] }
-            ]}
-        ]
-    };
+    // --- 題庫系統 ---
+    let externalQuestions = []; // 儲存外部載入的題庫
+    
+    // 內建備用題庫 (Fallback) - 結構更新以符合新 JSON 格式
+    const fallbackQuestions = [
+        {
+            "id": "fb_1",
+            "category": "產後調養",
+            "character": "醫女 蘇氏",
+            "story": [
+                "「夫人，小主子轉頭舔唇、把小手放進嘴裡，這是『尋乳信號』了。」",
+                "【調養小記】：舔唇、吃手是飢餓的早期信號，若等到嚎啕大哭已是過度飢餓。"
+            ],
+            "question": "看到寶寶的早期尋乳信號，夫人該怎麼做？",
+            "options": [
+                {
+                    "text": "趁他情緒安穩、尚未大哭前，趕緊抱過來依需求親餵。",
+                    "feedback": "【蘇醫女 欣喜】夫人抓時機真準！這時餵奶寶寶情緒穩定，含乳最順利！",
+                    "expr": "happy",
+                    "effects": { "knowledge": 20, "medic": 15, "bond": 5 }
+                },
+                {
+                    "text": "嚴格遵守長輩定時四小時餵一次的規矩，沒到先別理他。",
+                    "feedback": "【蘇醫女 柔聲提醒】等他哭鬧厲害時，往往就因為太餓而不好含乳了呢。",
+                    "expr": "shocked",
+                    "effects": { "knowledge": -10, "medic": -5, "bond": -5 }
+                },
+                {
+                    "text": "覺得吃手是不乖的壞習慣，拿手套把他的小手綁起來。",
+                    "feedback": "【蘇醫女 趕忙解釋】吃手是新生兒天生的尋乳反射，他在告訴您想喝奶了。",
+                    "expr": "normal",
+                    "effects": { "knowledge": -15, "medic": -10 }
+                }
+            ]
+        },
+        {
+            "id": "fb_2",
+            "category": "飲食調理",
+            "character": "膳房 總管",
+            "story": [
+                "「夫人！這十全大補麻油豬腳湯上面浮著厚油，最是滋補發奶！」",
+                "【調養小記】：產後發奶應多攝取水分與清淡蛋白質。過於油膩的濃湯容易導致乳汁脂肪過高，造成乳腺阻塞。"
+            ],
+            "question": "為了順暢發奶且不塞奶，夫人該如何選擇？",
+            "options": [
+                {
+                    "text": "撇去浮油，平日多喝清淡的魚湯與水分。",
+                    "feedback": "【總管 敬佩】清淡的高蛋白湯水好吸收又發奶，夫人深諳養生之道！",
+                    "expr": "happy",
+                    "effects": { "knowledge": 15, "chef": 20, "health": 10 }
+                },
+                {
+                    "text": "為了多產點奶，硬著頭皮把這整鍋油膩濃湯喝光。",
+                    "feedback": "【總管 擔憂】太過油膩容易讓乳汁脂肪過高，反倒容易塞奶。",
+                    "expr": "shocked",
+                    "effects": { "knowledge": -10, "chef": -5, "health": -15 }
+                },
+                {
+                    "text": "覺得胃口全無，什麼湯水都不想喝，空腹一整天。",
+                    "feedback": "【總管 慌忙規勸】夫人產後身子虛可不能不吃東西，奴才去熬小米粥。",
+                    "expr": "normal",
+                    "effects": { "knowledge": -5, "chef": -10, "health": -20 }
+                }
+            ]
+        },
+        {
+            "id": "fb_3",
+            "category": "產後調養",
+            "character": "太醫 張大人",
+            "story": [
+                "「夫人，小主子若含乳姿勢不對，只含住乳頭會導致微血管破損流血。」",
+                "【調養小記】：正確含乳應讓寶寶嘴巴張大，含住「大部分的乳暈」，下巴貼緊乳房。"
+            ],
+            "question": "為避免乳頭破損，正確的含乳姿勢應該是？",
+            "options": [
+                {
+                    "text": "讓寶寶嘴巴張大，下巴緊貼乳房，含住大部分乳暈。",
+                    "feedback": "【太醫 點頭稱是】大口含住乳暈才能正確擠壓乳腺，親餵才不會痛！",
+                    "expr": "happy",
+                    "effects": { "knowledge": 20, "doctor": 20 }
+                },
+                {
+                    "text": "做母親的忍一忍就過去了，只要寶寶含住前端用力吸就好。",
+                    "feedback": "【太醫 搖頭嘆息】萬萬不可強忍！只含乳頭會導致嚴重破損與發炎啊。",
+                    "expr": "shocked",
+                    "effects": { "knowledge": -15, "doctor": -15, "health": -10 }
+                },
+                {
+                    "text": "破損太痛了，內心恐懼，決定徹底放棄哺乳改餵水。",
+                    "feedback": "【太醫 柔聲規勸】微臣這就讓醫女來協助您調整姿勢，切莫沮喪。",
+                    "expr": "normal",
+                    "effects": { "knowledge": -10, "doctor": -10 }
+                }
+            ]
+        },
+        {
+            "id": "fb_4",
+            "category": "育兒知識",
+            "character": "丫鬟 春桃",
+            "story": [
+                "「夫人，母奶看起來好稀，小主子真的有吃飽嗎？」",
+                "【調養小記】：判斷吃飽最客觀的指標是尿布量。出生第四天後，一天有6片以上沉甸甸的濕尿布即充足。"
+            ],
+            "question": "判斷寶寶有沒有吃飽，最客觀科學的指標是？",
+            "options": [
+                {
+                    "text": "觀察尿布。一天有 6 片以上沉甸甸濕尿布便是有吃飽了。",
+                    "feedback": "【春桃 恍然大悟】原來如此！看尿量最準確，奴婢去記尿布！",
+                    "expr": "happy",
+                    "effects": { "knowledge": 15, "maid": 20 }
+                },
+                {
+                    "text": "只要他一哭就是沒吃飽，立刻給他補配方奶！",
+                    "feedback": "【春桃 擔憂】夫人...過度補奶反而會讓您的母乳分泌變少喔。",
+                    "expr": "shocked",
+                    "effects": { "knowledge": -10, "maid": -10 }
+                },
+                {
+                    "text": "感到很沮喪，懷疑自己的奶水沒有營養。",
+                    "feedback": "【春桃 輕聲安慰】蘇醫女說親餵量絕對足夠，您別給自己壓力。",
+                    "expr": "normal",
+                    "effects": { "knowledge": -5, "maid": -5 }
+                }
+            ]
+        }
+    ];
+
+    // 非同步載入題庫
+    async function loadQuestions() {
+        try {
+            const response = await fetch('questions.json');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            if (Array.isArray(data) && data.length > 0) {
+                externalQuestions = data;
+                console.log("外部題庫載入成功！共載入 " + data.length + " 題。");
+            } else {
+                throw new Error("JSON 格式不正確或為空。");
+            }
+        } catch (error) {
+            console.warn("無法載入外部題庫，使用內建備用題庫。", error);
+            externalQuestions = [...fallbackQuestions];
+        } finally {
+            // 無論成功或失敗，都切換到 START 狀態
+            currentState = STATES.START;
+        }
+    }
+
+    // 啟動時載入
+    loadQuestions();
 
     let activePools = {};
+    
+    // 依據角色分類題目 (相容舊版邏輯)
     function resetPools() {
-        activePools = { maid: shuffle([...allQuestionPools.maid]), chef: shuffle([...allQuestionPools.chef]), doctor: shuffle([...allQuestionPools.doctor]), medic: shuffle([...allQuestionPools.medic]) };
+        let pool = externalQuestions.length > 0 ? externalQuestions : fallbackQuestions;
+        
+        // 預設每個角色對應的池
+        let maidPool = pool.filter(q => q.character.includes('丫鬟') || q.character.includes('春桃'));
+        let chefPool = pool.filter(q => q.character.includes('膳房') || q.character.includes('總管'));
+        let doctorPool = pool.filter(q => q.character.includes('太醫') || q.character.includes('張大人'));
+        let medicPool = pool.filter(q => q.character.includes('醫女') || q.character.includes('蘇氏'));
+        
+        // 如果外部題庫沒有指定角色，平均分配
+        if(maidPool.length === 0 && chefPool.length === 0 && doctorPool.length === 0 && medicPool.length === 0) {
+            let shuffledPool = shuffle([...pool]);
+            let qPerRole = Math.floor(shuffledPool.length / 4);
+            maidPool = shuffledPool.slice(0, qPerRole);
+            chefPool = shuffledPool.slice(qPerRole, qPerRole*2);
+            doctorPool = shuffledPool.slice(qPerRole*2, qPerRole*3);
+            medicPool = shuffledPool.slice(qPerRole*3);
+        }
+
+        // 確保每個池就算沒有專屬題目，也放一些後備題目進去，避免崩潰
+        if(maidPool.length === 0) maidPool = [fallbackQuestions.find(q=>q.character.includes('丫鬟')) || fallbackQuestions[0]];
+        if(chefPool.length === 0) chefPool = [fallbackQuestions.find(q=>q.character.includes('膳房')) || fallbackQuestions[1]];
+        if(doctorPool.length === 0) doctorPool = [fallbackQuestions.find(q=>q.character.includes('太醫')) || fallbackQuestions[2]];
+        if(medicPool.length === 0) medicPool = [fallbackQuestions.find(q=>q.character.includes('醫女')) || fallbackQuestions[3]];
+
+
+        activePools = { 
+            maid: shuffle(maidPool), 
+            chef: shuffle(chefPool), 
+            doctor: shuffle(doctorPool), 
+            medic: shuffle(medicPool) 
+        };
     }
-    resetPools();
 
     const introStage = {   
         character: "醫女 蘇氏",
         story: ["【大宋汴京 · 侯府】\n昨日歷經千辛萬苦，終於平安誕下了府裡的嫡出小少爺。", "「初為人母，事事皆新。我定要好好學習調養與育兒技巧，保重鳳體。」", "「夫人，現在為您進行產後『早期肌膚接觸』。這能刺激荷爾蒙分泌。」\n【調養小記】：母乳含天然抗體與生長因子，能建立強大腸道免疫系統。"],
         question: "望著懷中柔嫩的孩兒，您決定如何開啟這趟旅程？",
         options: [
-            { text: "學習現代科學親餵法，與下人們攜手配合。", feedback: "【蘇醫女 欣慰】夫人做得極好！皮膚貼皮膚，激發本能！", val: 20, expr: 'happy', affects: [{char: 'medic', val: 20}] },
-            { text: "怕寶寶著涼，用厚厚的蠶絲包巾包得緊緊的。", feedback: "【蘇醫女 提醒】包得太厚無法達到『肌膚接觸』，會阻礙本能喔。", val: -15, expr: 'shocked', affects: [{char: 'medic', val: -15}] },
-            { text: "太累了，決定先推去嬰兒室交給其他人。", feedback: "【蘇醫女 勸解】若能撐過黃金接觸期，之後泌乳會更順暢，慢慢來。", val: -20, expr: 'normal', affects: [{char: 'medic', val: -20}] }
+            { text: "學習現代科學親餵法，與下人們攜手配合。", feedback: "【蘇醫女 欣慰】夫人做得極好！皮膚貼皮膚，激發本能！", expr: 'happy', effects: { knowledge: 20, medic: 20 } },
+            { text: "怕寶寶著涼，用厚厚的蠶絲包巾包得緊緊的。", feedback: "【蘇醫女 提醒】包得太厚無法達到『肌膚接觸』，會阻礙本能喔。", expr: 'shocked', effects: { knowledge: -10, medic: -15 } },
+            { text: "太累了，決定先推去嬰兒室交給其他人。", feedback: "【蘇醫女 勸解】若能撐過黃金接觸期，之後泌乳會更順暢，慢慢來。", expr: 'normal', effects: { knowledge: -5, medic: -20 } }
         ]
     };
 
@@ -211,9 +320,9 @@
         story: ["老夫人派人送來了極其珍貴的『千年人參湯』，指名要給我補身子。","「夫人！這千年人參雖是大補，但對產婦而言，卻是退奶的大忌啊！」\n【調養小記】：人參、韭菜、麥芽水等都是常見的退奶食物，哺乳期應避開。"],
         question: "面對賞賜與太醫的勸告，您該如何應對？",
         options: [
-            { text: "婉拒並請太醫作證會退奶，改請賜黑豆豬腳湯。", feedback: "【太醫 撫鬚】夫人睿智！既保全了顏面，又守住了小少爺的糧倉。", val: 20, expr: 'happy', affects: [{char: 'doctor', val: 20}] },
-            { text: "為了面子硬著頭皮喝下去。", feedback: "【太醫 擔憂】這...夫人，您喝了之後當晚奶水疏少，下次可得留心了。", val: -20, expr: 'shocked', affects: [{char: 'doctor', val: -20}] },
-            { text: "有些不知所措，不知道該聽誰的。", feedback: "【太醫 溫言勸阻】夫人莫慌。這參湯咱們婉言推辭即可。", val: -10, expr: 'normal', affects: [{char: 'doctor', val: -10}] }
+            { text: "婉拒並請太醫作證會退奶，改請賜黑豆豬腳湯。", feedback: "【太醫 撫鬚】夫人睿智！既保全了顏面，又守住了小少爺的糧倉。", expr: 'happy', effects: { knowledge: 20, doctor: 20 } },
+            { text: "為了面子硬著頭皮喝下去。", feedback: "【太醫 擔憂】這...夫人，您喝了之後當晚奶水疏少，下次可得留心了。", expr: 'shocked', effects: { knowledge: -15, doctor: -20, health: -10 } },
+            { text: "有些不知所措，不知道該聽誰的。", feedback: "【太醫 溫言勸阻】夫人莫慌。這參湯咱們婉言推辭即可。", expr: 'normal', effects: { doctor: -10 } }
         ]
     };
 
@@ -635,34 +744,61 @@
         }
     }
 
-    function applyChoice(opt) {
-        player.knowledge += opt.val;
-        mainCharacter.setEmotion(opt.expr);
-        selectedOptionFeedback = opt.feedback;
-        
+    // --- 修改：套用動態效果 ---
+    function applyEffects(effects) {
         let offsetY = ch/2 - 100;
-        let hasPositive = false; let hasNegative = false;
+        let hasPositive = false; 
+        let hasNegative = false;
 
-        if (opt.affects) {
-            opt.affects.forEach((r) => {
-                let targetChar = player.affections[r.char];
-                if (targetChar) {
-                    targetChar.target = Math.max(0, Math.min(targetChar.max, targetChar.target + r.val)); 
-                    let color = r.val >= 0 ? targetChar.color : "#e74c3c";
-                    floatingTexts.push(new FloatingText(cw/2, offsetY, `${targetChar.name} ${r.val>=0?'+':''}${r.val}`, color));
+        if (effects) {
+            // 處理能力值
+            const statsMap = {
+                'knowledge': '智慧',
+                'health': '體力',
+                'reputation': '聲望',
+                'bond': '羈絆'
+            };
+
+            for (let key in statsMap) {
+                if (effects[key]) {
+                    player[key] += effects[key];
+                    player[key] = Math.max(0, Math.min(100, player[key])); // 確保在 0-100 之間
+                    
+                    let color = effects[key] >= 0 ? '#4caf50' : '#e74c3c';
+                    floatingTexts.push(new FloatingText(cw/2, offsetY, `${statsMap[key]} ${effects[key] >= 0 ? '+' : ''}${effects[key]}`, color));
                     offsetY -= 40;
-                    if(r.val > 0) hasPositive = true; else hasNegative = true;
+                    if(effects[key] > 0) hasPositive = true; else hasNegative = true;
+                }
+            }
+
+            // 處理好感度
+            const npcMap = ['maid', 'chef', 'doctor', 'medic'];
+            npcMap.forEach(role => {
+                if (effects[role]) {
+                    let targetChar = player.affections[role];
+                    if (targetChar) {
+                        targetChar.target = Math.max(0, Math.min(targetChar.max, targetChar.target + effects[role])); 
+                        let color = effects[role] >= 0 ? targetChar.color : "#e74c3c";
+                        floatingTexts.push(new FloatingText(cw/2, offsetY, `${targetChar.name} ${effects[role]>=0?'+':''}${effects[role]}`, color));
+                        offsetY -= 40;
+                        if(effects[role] > 0) hasPositive = true; else hasNegative = true;
+                    }
                 }
             });
         }
         
-        let kColor = opt.val > 0 ? '#4caf50' : '#e74c3c';
-        floatingTexts.push(new FloatingText(cw/2, offsetY, `${opt.val > 0 ? '+' : ''}${opt.val} 智慧`, kColor));
+        if (hasPositive) { bloomIntensity = 1.0; bloomColor = '255,215,0'; } 
+        if (hasNegative) { cameraShake.amount = 12; bloomIntensity = 0.5; bloomColor = '255,0,0'; }
+    }
+
+
+    // --- 答題處理 ---
+    function applyChoice(opt) {
+        mainCharacter.setEmotion(opt.expr || 'normal'); // 如果外部題庫沒有 expr，預設為 normal
+        selectedOptionFeedback = opt.feedback;
         
-        if (opt.val > 0 || hasPositive) { bloomIntensity = 1.0; bloomColor = '255,215,0'; } 
-        if (opt.val < 0 || hasNegative) { cameraShake.amount = 12; bloomIntensity = 0.5; bloomColor = '255,0,0'; }
+        applyEffects(opt.effects);
         
-        player.knowledge = Math.max(0, Math.min(100, player.knowledge));
         currentState = STATES.FEEDBACK;
     }
 
@@ -965,8 +1101,8 @@
                 story: ["「夫人喚微臣/奴婢前來，可是身子有些勞累？產後多休息，保持心情愉悅是最好的調養喔。」"],
                 question: "面對下人的貼心問候，您打算？",
                 options: shuffle([
-                    { text: "微笑點頭，詢問今日少爺的照護狀況。", feedback: "大家都為夫人的溫和明理感到如沐春風。", val: 15, expr: 'happy', affects: [{char: roleId, val: 15}] },
-                    { text: "覺得有些疲倦，點點頭讓他們先下去忙吧。", feedback: "大家體諒夫人產後虛弱，輕聲告退讓您好好歇息。", val: 5, expr: 'normal', affects: [{char: roleId, val: 5}] }
+                    { text: "微笑點頭，詢問今日少爺的照護狀況。", feedback: "大家都為夫人的溫和明理感到如沐春風。", expr: 'happy', effects: { [roleId]: 15 } },
+                    { text: "覺得有些疲倦，點點頭讓他們先下去忙吧。", feedback: "大家體諒夫人產後虛弱，輕聲告退讓您好好歇息。", expr: 'normal', effects: { [roleId]: 5 } }
                 ])
             };
         }
@@ -1043,26 +1179,34 @@
         Object.values(npcs).forEach(npc => npc.update(dt));
         
         let activeCharacter = mainCharacter;
-        if (currentState === STATES.STORY || currentState === STATES.QUESTION || currentState === STATES.FEEDBACK) {
-            let stage = currentStage || introStage;
-            let charName = stage.character || "";
-            if (charName.includes("春桃")) activeCharacter = npcs.maid;
-            else if (charName.includes("總管")) activeCharacter = npcs.chef;
-            else if (charName.includes("張大人") || charName.includes("太醫")) activeCharacter = npcs.doctor;
-            else if (charName.includes("蘇氏") || charName.includes("醫女")) activeCharacter = npcs.medic;
-        } else if (currentState === STATES.INTERACT_CHOICE || currentState === STATES.MORNING_ACTION || currentState === STATES.RANDOM_EVENT || currentState === STATES.HIDDEN_EVENT || currentState === STATES.ACTION_RESULT) {
-            activeCharacter = mainCharacter;
-        }
+        // 如果是載入中，不畫角色
+        if (currentState !== STATES.LOADING) {
+            if (currentState === STATES.STORY || currentState === STATES.QUESTION || currentState === STATES.FEEDBACK) {
+                let stage = currentStage || introStage;
+                let charName = stage.character || "";
+                if (charName.includes("春桃")) activeCharacter = npcs.maid;
+                else if (charName.includes("總管")) activeCharacter = npcs.chef;
+                else if (charName.includes("張大人") || charName.includes("太醫")) activeCharacter = npcs.doctor;
+                else if (charName.includes("蘇氏") || charName.includes("醫女")) activeCharacter = npcs.medic;
+            } else if (currentState === STATES.INTERACT_CHOICE || currentState === STATES.MORNING_ACTION || currentState === STATES.RANDOM_EVENT || currentState === STATES.HIDDEN_EVENT || currentState === STATES.ACTION_RESULT) {
+                activeCharacter = mainCharacter;
+            }
 
-        if (currentState !== STATES.DAY_TRANSITION) {
-            let charScale = Math.max(1.0, Math.min(cw/600, ch/800) * 2.2);
-            activeCharacter.draw(ctx, cw/2, ch/2 + 100, charScale);
+            if (currentState !== STATES.DAY_TRANSITION && currentState !== STATES.START && currentState !== STATES.END) {
+                let charScale = Math.max(1.0, Math.min(cw/600, ch/800) * 2.2);
+                activeCharacter.draw(ctx, cw/2, ch/2 + 100, charScale);
+            }
         }
 
         clickZones = [];
         canvas.style.cursor = 'crosshair'; 
-        
-        if (currentState === STATES.START) {
+
+        if (currentState === STATES.LOADING) {
+             ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,cw,ch);
+             ctx.textAlign = 'center'; ctx.fillStyle = '#d4af37'; ctx.font = `bold 30px ${FONT_FAMILY}`; 
+             ctx.fillText("載入題庫中...", cw/2, ch/2);
+        }
+        else if (currentState === STATES.START) {
             ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,cw,ch);
             ctx.textAlign = 'center'; ctx.shadowColor = '#d4af37'; ctx.shadowBlur = 20;
             ctx.fillStyle = '#fff'; 
@@ -1255,8 +1399,10 @@
     });
     canvas.addEventListener('mouseup', e => {
         mouse.isDown = false;
-        let rect = canvas.getBoundingClientRect();
-        handleInteraction((e.clientX - rect.left) * (cw / rect.width), (e.clientY - rect.top) * (ch / rect.height));
+        if (currentState !== STATES.LOADING) {
+            let rect = canvas.getBoundingClientRect();
+            handleInteraction((e.clientX - rect.left) * (cw / rect.width), (e.clientY - rect.top) * (ch / rect.height));
+        }
     });
     
     canvas.addEventListener('touchstart', e => { 
@@ -1269,10 +1415,10 @@
     }, {passive: false});
     canvas.addEventListener('touchend', e => {
         mouse.isDown = false;
-        handleInteraction(mouse.targetX, mouse.targetY);
+        if (currentState !== STATES.LOADING) {
+            handleInteraction(mouse.targetX, mouse.targetY);
+        }
     });
-
-    requestAnimationFrame(gameLoop);
 
 </script>
 </body>
