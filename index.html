@@ -12,9 +12,9 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
-            background-color: #f5eedc; /* 亮色系：溫暖的宣紙底色 */
+            background-color: #fdfaf4; /* 極亮色系：頂級宣紙白 */
             background-image: radial-gradient(#e8ddc5 1px, transparent 0);
-            background-size: 20px 20px;
+            background-size: 30px 30px;
             font-family: 'Kaiti', '標楷體', serif;
             overflow: hidden; 
         }
@@ -29,10 +29,10 @@
             max-width: 100vw;
             max-height: 100vh;
             aspect-ratio: 8 / 9;
-            background-color: #faf5eb; /* 畫布預設亮底色 */
-            box-shadow: 0 10px 40px rgba(100, 70, 40, 0.3); /* 柔和的咖啡色陰影 */
-            border: 4px solid #b58c5c; /* 明亮的燙金/棕木色邊框 */
-            border-radius: 8px;
+            background-color: #fffefb; /* 畫布超亮底色 */
+            box-shadow: 0 15px 50px rgba(139, 107, 74, 0.2); /* 柔和的高貴金棕色陰影 */
+            border: 6px solid #d4af37; /* 明亮的燙金邊框 */
+            border-radius: 12px;
             object-fit: contain;
             touch-action: none;
         }
@@ -71,6 +71,10 @@
     let raindrops = [];
     let petals = [];
 
+    // 快取生成的高清圖
+    const bgCanvases = {};
+    const charCanvases = {};
+
     let isEarlyGameOver = false;
     let earlyGameOverCharId = "";
     let endingScenes = [];
@@ -100,10 +104,10 @@
         residence: "華麗正房",
         knowledgeScore: 50, 
         affections: {
-            maid: { name: "丫鬟 春桃", current: 50, target: 50, max: 100, color: "#d66b7a", status: "平淡" },
-            chef: { name: "膳房 總管", current: 50, target: 50, max: 100, color: "#8c5b36", status: "平淡" },
-            doctor: { name: "太醫 張大人", current: 50, target: 50, max: 100, color: "#2d5e40", status: "平淡" },
-            medic: { name: "醫女 蘇氏", current: 50, target: 50, max: 100, color: "#457b9d", status: "平淡" }
+            maid: { name: "丫鬟 春桃", current: 50, target: 50, max: 100, color: "#ff8da1", status: "平淡" },
+            chef: { name: "膳房 總管", current: 50, target: 50, max: 100, color: "#d29c72", status: "平淡" },
+            doctor: { name: "太醫 張大人", current: 50, target: 50, max: 100, color: "#6ca07e", status: "平淡" },
+            medic: { name: "醫女 蘇氏", current: 50, target: 50, max: 100, color: "#82c0d9", status: "平淡" }
         }
     };
 
@@ -120,386 +124,6 @@
 
     let questionPools = { maid: [], chef: [], doctor: [], medic: [] };
 
-    // ==========================================
-    // 資源載入系統 (Images Assets Loading)
-    // ==========================================
-    const ASSET_URLS = {
-        bg: {
-            '華麗正房': './assets/bg/room1.jpg',
-            '雅致書閣': './assets/bg/room2.jpg',
-            '繁華暖閣': './assets/bg/room3.jpg',
-            '膳房外廂': './assets/bg/kitchen.jpg',
-            '侯府花園': './assets/bg/garden.jpg',
-            '侯府正廳': './assets/bg/hall.jpg',
-            '避風暖閣': './assets/bg/warm.jpg',
-            '主母臥房': './assets/bg/room1.jpg' // Fallback
-        },
-        chars: {
-            'baby_normal': './assets/chars/baby.png'
-        }
-    };
-
-    // 自動生成角色與表情的路徑表
-    const rolesBase = ['maid', 'chef', 'doctor', 'medic'];
-    const expressionsList = ['normal', 'happy', 'shocked', 'angry'];
-    
-    rolesBase.forEach(role => {
-        expressionsList.forEach(expr => {
-            ASSET_URLS.chars[`${role}_${expr}`] = `./assets/chars/${role}_${expr}.png`;
-        });
-    });
-    
-    // 生成玩家路徑表
-    faceKeys.forEach(f => {
-        clothKeys.forEach(c => {
-            expressionsList.forEach(expr => {
-                ASSET_URLS.chars[`player_${f}_${c}_${expr}`] = `./assets/chars/player_${f}_${c}_${expr}.png`;
-            });
-        });
-    });
-
-    const loadedImages = { bg: {}, chars: {} };
-
-    // 實例化載入圖片
-    for (let key in ASSET_URLS.bg) {
-        let img = new Image();
-        img.src = ASSET_URLS.bg[key];
-        loadedImages.bg[key] = img;
-    }
-
-    for (let key in ASSET_URLS.chars) {
-        let img = new Image();
-        img.src = ASSET_URLS.chars[key];
-        loadedImages.chars[key] = img;
-    }
-
-    // ==========================================
-    // 物理特效與天氣粒子類別 (適應亮色背景)
-    // ==========================================
-    class Snowflake {
-        constructor() {
-            this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height;
-            this.size = Math.random() * 3 + 1; this.speedY = Math.random() * 1 + 0.5;
-            this.speedX = (Math.random() - 0.5) * 0.5; this.opacity = Math.random() * 0.6 + 0.4;
-        }
-        update() {
-            this.y += this.speedY; this.x += this.speedX;
-            if (this.y > canvas.height) { this.y = -10; this.x = Math.random() * canvas.width; }
-        }
-        draw(ctx) {
-            ctx.save(); ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
-            ctx.shadowColor = '#dcdcdc'; ctx.shadowBlur = 2; // 讓雪花在亮色背景稍微明顯
-            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-        }
-    }
-
-    class Raindrop {
-        constructor() {
-            this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height;
-            this.speed = Math.random() * 15 + 10; this.length = Math.random() * 20 + 10;
-        }
-        update() {
-            this.y += this.speed;
-            if (this.y > canvas.height) { this.y = -20; this.x = Math.random() * canvas.width; }
-        }
-        draw(ctx) {
-            ctx.strokeStyle = 'rgba(120, 150, 180, 0.6)'; ctx.lineWidth = 2; // 較深的雨滴
-            ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x - 2, this.y + this.length); ctx.stroke();
-        }
-    }
-
-    class Petal {
-        constructor() {
-            this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height;
-            this.vx = Math.random() * 1 + 0.5; this.vy = Math.random() * 1 + 1;
-            this.size = Math.random() * 5 + 3; this.angle = Math.random() * Math.PI * 2; this.spin = Math.random() * 0.05 - 0.025;
-        }
-        update() {
-            this.x += this.vx; this.y += this.vy; this.angle += this.spin;
-            if (this.y > canvas.height) { this.y = -10; this.x = Math.random() * canvas.width; }
-        }
-        draw(ctx) {
-            ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
-            ctx.fillStyle = 'rgba(240, 128, 128, 0.7)'; // 鮮豔的櫻花粉
-            ctx.beginPath(); ctx.ellipse(0, 0, this.size, this.size / 2, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-        }
-    }
-
-    class Confetti {
-        constructor(x, y, colorCode) {
-            this.x = x; this.y = y;
-            this.vx = (Math.random() - 0.5) * 16; this.vy = (Math.random() - 1) * 16 - 2;
-            this.color = colorCode || ['#ff7b7b', '#f9a826', '#4ecdc4', '#ffcf59'][Math.floor(Math.random() * 4)];
-            this.life = 1.0; this.wobble = Math.random() * Math.PI * 2;
-            this.wobbleSpeed = Math.random() * 0.1 + 0.05;
-            this.rotation = Math.random() * Math.PI * 2; this.rotSpeed = (Math.random() - 0.5) * 0.2;
-        }
-        update() {
-            this.vx *= 0.94; this.vy += 0.4;  
-            this.x += this.vx + Math.sin(this.wobble) * 2.5; this.y += this.vy;
-            this.wobble += this.wobbleSpeed; this.rotation += this.rotSpeed; this.life -= 0.015;
-        }
-        draw(ctx) {
-            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
-            ctx.translate(this.x, this.y); ctx.rotate(this.rotation);
-            ctx.fillStyle = this.color; ctx.fillRect(-6, -6, 12, 12); ctx.restore();
-        }
-    }
-
-    class DarkAura {
-        constructor(x, y) {
-            this.x = x; this.y = y;
-            this.vx = (Math.random() - 0.5) * 12; this.vy = (Math.random() - 0.5) * 12 - 2;
-            this.size = Math.random() * 15 + 5; this.life = 1.0;
-        }
-        update() {
-            this.x += this.vx; this.y += this.vy;
-            this.vx *= 0.9; this.vy *= 0.9; this.size *= 0.97; this.life -= 0.02;
-        }
-        draw(ctx) {
-            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
-            ctx.fillStyle = '#6c7a89'; 
-            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill(); ctx.restore();
-        }
-    }
-
-    class GoldenRing { 
-        constructor(x, y) { this.x = x; this.y = y; this.r = 0; this.life = 1.0; }
-        update() { this.r += (200 - this.r) * 0.15; this.life -= 0.02; }
-        draw(ctx) {
-            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
-            ctx.strokeStyle = '#f39c12'; ctx.lineWidth = 10 * this.life;
-            ctx.shadowColor = '#f1c40f'; ctx.shadowBlur = 15;
-            ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2); ctx.stroke(); ctx.restore();
-        }
-    }
-
-    class RedSlash { 
-        constructor(x, y) { this.x = x; this.y = y; this.life = 1.0; this.progress = 0; }
-        update() { this.progress += (1 - this.progress) * 0.25; this.life -= 0.025; }
-        draw(ctx) {
-            ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y);
-            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 20; ctx.lineCap = 'round'; 
-            ctx.shadowColor = 'rgba(231, 76, 60, 0.6)'; ctx.shadowBlur = 20;
-            let length = 100 * this.progress;
-            ctx.beginPath(); ctx.moveTo(-length, -length); ctx.lineTo(length, length); ctx.stroke();
-            ctx.restore();
-        }
-    }
-
-    class FloatingText {
-        constructor(x, y, text, color) {
-            this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.scale = 0.5;
-        }
-        update() { this.y -= 1.2; this.life -= 0.012; this.scale += (1 - this.scale) * 0.2; }
-        draw(ctx) {
-            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
-            ctx.translate(this.x, this.y); ctx.scale(this.scale, this.scale);
-            ctx.fillStyle = this.color; ctx.font = 'bold 30px "Kaiti", serif';
-            ctx.shadowColor = 'rgba(255,255,255,0.8)'; ctx.shadowBlur = 6; // 亮色底改白邊陰影
-            ctx.textAlign = 'center'; ctx.fillText(this.text, 0, 0); ctx.restore();
-        }
-    }
-
-    snowflakes = Array.from({ length: 80 }, () => new Snowflake());
-    raindrops = Array.from({ length: 60 }, () => new Raindrop());
-    petals = Array.from({ length: 30 }, () => new Petal());
-
-    // ==========================================
-    // 亮色系 UI 相關工具函數
-    // ==========================================
-    const UI = {
-        dialogueBox: { x: 50, y: 520, w: 700, h: 350 }, 
-        btns: [
-            { x: 80, y: 590, w: 640, h: 80 }, 
-            { x: 80, y: 680, w: 640, h: 80 },
-            { x: 80, y: 770, w: 640, h: 80 }
-        ],
-        nameLeft: { x: 230, y: 170, w: 40, h: 40 },
-        nameRight: { x: 480, y: 170, w: 40, h: 40 },
-        faceLeft: { x: 230, y: 290, w: 40, h: 40 },
-        faceRight: { x: 480, y: 290, w: 40, h: 40 },
-        clothLeft: { x: 230, y: 410, w: 40, h: 40 },
-        clothRight: { x: 480, y: 410, w: 40, h: 40 },
-        resLeft: { x: 230, y: 530, w: 40, h: 40 },
-        resRight: { x: 480, y: 530, w: 40, h: 40 },
-        confirmBtn: { x: 280, y: 650, w: 200, h: 60 },
-        interactBtns: [
-            { x: 90, y: 600, w: 280, h: 80 },
-            { x: 430, y: 600, w: 280, h: 80 },
-            { x: 90, y: 710, w: 280, h: 80 },
-            { x: 430, y: 710, w: 280, h: 80 }
-        ]
-    };
-
-    function getLines(context, text, maxWidth) {
-        if (!text) return [];
-        let lines = [];
-        let paragraphs = text.split('\n');
-        for (let p = 0; p < paragraphs.length; p++) {
-            let words = paragraphs[p].split('');
-            let line = '';
-            for (let n = 0; n < words.length; n++) {
-                let testLine = line + words[n];
-                if (context.measureText(testLine).width > maxWidth && n > 0) {
-                    lines.push(line);
-                    line = words[n];
-                } else {
-                    line = testLine;
-                }
-            }
-            if (line.length > 0 || paragraphs.length > 1) {
-                lines.push(line);
-            }
-        }
-        return lines;
-    }
-
-    function isHovered(btn) {
-        return mouse.x >= btn.x && mouse.x <= btn.x + btn.w && mouse.y >= btn.y && mouse.y <= btn.y + btn.h;
-    }
-
-    function drawButton(btnObj, text) {
-        let hover = isHovered(btnObj);
-        // 亮色按鈕樣式
-        ctx.fillStyle = hover ? 'rgba(235, 215, 185, 0.95)' : 'rgba(255, 248, 238, 0.9)';
-        ctx.fillRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
-        ctx.strokeStyle = hover ? '#c0392b' : '#b58c5c'; 
-        ctx.lineWidth = hover ? 3 : 2;
-        ctx.strokeRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
-        
-        ctx.fillStyle = '#3a2818'; // 深棕色字體
-        ctx.font = 'bold 22px "Kaiti", serif';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; 
-        let lines = getLines(ctx, text, btnObj.w - 60);
-        let lineHeight = 30;
-        let startY = btnObj.y + (btnObj.h / 2) - ((lines.length - 1) * lineHeight / 2);
-        for (let i = 0; i < lines.length; i++) {
-            ctx.fillText(lines[i], btnObj.x + btnObj.w / 2, startY + (i * lineHeight));
-        }
-        ctx.textBaseline = 'alphabetic'; 
-    }
-
-    function drawSmallButton(btnObj, text) {
-        let hover = isHovered(btnObj);
-        ctx.fillStyle = hover ? 'rgba(235, 215, 185, 0.95)' : 'rgba(255, 248, 238, 0.9)';
-        ctx.fillRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
-        ctx.strokeStyle = hover ? '#c0392b' : '#b58c5c'; 
-        ctx.lineWidth = 2;
-        ctx.strokeRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
-        ctx.fillStyle = '#3a2818'; 
-        ctx.font = 'bold 24px "Kaiti", serif';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; 
-        ctx.fillText(text, btnObj.x + btnObj.w / 2, btnObj.y + btnObj.h / 2);
-        ctx.textBaseline = 'alphabetic'; 
-    }
-
-    function drawDialogueBox(name, text, showHint = true) {
-        // 亮色對話框底板
-        ctx.fillStyle = 'rgba(252, 248, 242, 0.95)';
-        ctx.fillRect(UI.dialogueBox.x, UI.dialogueBox.y, UI.dialogueBox.w, UI.dialogueBox.h);
-        ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 3;
-        ctx.strokeRect(UI.dialogueBox.x, UI.dialogueBox.y, UI.dialogueBox.w, UI.dialogueBox.h);
-        // 內部細線裝飾
-        ctx.strokeStyle = 'rgba(181, 140, 92, 0.3)'; ctx.lineWidth = 1;
-        ctx.strokeRect(UI.dialogueBox.x + 6, UI.dialogueBox.y + 6, UI.dialogueBox.w - 12, UI.dialogueBox.h - 12);
-
-        if (name) {
-            ctx.fillStyle = '#b58c5c'; 
-            ctx.fillRect(UI.dialogueBox.x - 2, UI.dialogueBox.y - 40, 200, 42);
-            ctx.fillStyle = '#ffffff'; 
-            ctx.font = 'bold 24px "Kaiti", serif'; ctx.textAlign = 'center';
-            ctx.fillText(name, UI.dialogueBox.x + 100, UI.dialogueBox.y - 12);
-        }
-
-        // 高亮文字使用酒紅或深棕色
-        if (text.includes("【調養小記】") || text.includes("【衛教小知識】") || text.includes("【知識】")) {
-            ctx.fillStyle = '#a03b2d'; // 酒紅色突出顯示
-        } else {
-            ctx.fillStyle = '#3a2818'; // 深墨色文字
-        }
-
-        ctx.font = '22px "Kaiti", serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; 
-        let lines = getLines(ctx, text, UI.dialogueBox.w - 60);
-        let lineHeight = 32; let startY = UI.dialogueBox.y + 35;
-        for (let i = 0; i < lines.length; i++) {
-            ctx.fillText(lines[i], UI.dialogueBox.x + 30, startY + i * lineHeight);
-        }
-        ctx.textBaseline = 'alphabetic'; 
-
-        if (showHint) {
-            ctx.globalAlpha = (Math.sin(time * 5) + 1) / 2 * 0.5 + 0.5;
-            ctx.fillStyle = '#b58c5c'; ctx.font = '16px "Kaiti", serif'; ctx.textAlign = 'right';
-            ctx.fillText("▼ 點擊畫面繼續 ▼", UI.dialogueBox.x + UI.dialogueBox.w - 20, UI.dialogueBox.y + UI.dialogueBox.h - 15);
-            ctx.globalAlpha = 1.0;
-        }
-    }
-
-    function drawDatePanel() {
-        let dayInfo = daysData[Math.min(currentDay - 1, daysData.length - 1)];
-        ctx.fillStyle = 'rgba(252, 248, 242, 0.9)'; ctx.fillRect(20, 20, 300, 110);
-        ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 2; ctx.strokeRect(20, 20, 300, 110);
-        
-        ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 20px "Kaiti", serif'; ctx.textAlign = 'left';
-        ctx.fillText(`【大宋 宣和元年】`, 30, 45);
-        ctx.fillStyle = '#3a2818'; ctx.font = '18px "Kaiti", serif';
-        
-        let displayLoc = dayInfo.location === "player_residence" ? player.residence : dayInfo.location;
-        ctx.fillText(`${dayInfo.day} ‧ ${displayLoc}`, 40, 75);
-        
-        let weatherMap = { sunny: "萬里無雲", cloudy: "多雲蔽日", rainy: "霪雨霏霏", snowy: "大雪紛飛" };
-        ctx.fillText(`時令: ${weatherMap[dayInfo.weather]}`, 40, 100);
-    }
-
-    function drawStatsPanel() {
-        ctx.fillStyle = 'rgba(252, 248, 242, 0.9)'; ctx.fillRect(520, 20, 260, 230);
-        ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 2; ctx.strokeRect(520, 20, 260, 230);
-        
-        ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 20px "Kaiti", serif'; ctx.textAlign = 'left';
-        ctx.fillText(`【府邸後宅人際關係】`, 535, 45);
-
-        let startY = 80;
-        for (const key in player.affections) {
-            let stat = player.affections[key];
-            stat.current += (stat.target - stat.current) * 0.05;
-            
-            let statusColor = '#3a2818';
-            if(stat.target <= 0) statusColor = '#e74c3c'; 
-            else if(['嫌隙', '心寒', '厭惡', '覺得荒唐', '心灰意冷', '瑟瑟發抖', '氣急敗壞', '慌張', '恐懼', '強烈厭惡', '疑惑'].includes(stat.status)) statusColor = '#c0392b';
-            else if(['崇拜', '崇敬', '死心塌地', '情同姐妹', '醫者父母心', '敬畏', '知音', '安心', '欣慰', '敬佩'].includes(stat.status)) statusColor = '#27ae60';
-
-            // 畫小頭像 (如果找不到圖就畫個框)
-            let imgExpr = 'normal';
-            if(statusColor === '#e74c3c' || statusColor === '#c0392b') imgExpr = 'angry';
-            if(statusColor === '#27ae60') imgExpr = 'happy';
-
-            let charImgKey = `${key}_${imgExpr}`;
-            let img = loadedImages.chars[charImgKey] || loadedImages.chars[`${key}_normal`];
-            
-            if (img && img.complete && img.naturalWidth > 0) {
-                try { 
-                    // 假設圖示是 400x500，取頭部
-                    ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight * 0.5, 528, startY - 20, 30, 30); 
-                } catch(e) {}
-            } else {
-                ctx.fillStyle = '#e0d8c8'; ctx.fillRect(528, startY - 20, 30, 30);
-            }
-
-            ctx.fillStyle = '#3a2818'; ctx.font = 'bold 15px "Kaiti", serif'; ctx.textAlign = 'left';
-            ctx.fillText(`${stat.name}`, 565, startY);
-            ctx.fillStyle = statusColor; ctx.fillText(`[${stat.status}]`, 635, startY);
-            
-            ctx.fillStyle = '#e0d8c8'; ctx.fillRect(565, startY + 8, 200, 8); // 背景條
-            ctx.fillStyle = stat.color; 
-            let barWidth = Math.max(0, (stat.current / stat.max) * 200);
-            ctx.fillRect(565, startY + 8, barWidth, 8); 
-            startY += 45;
-        }
-    }
-
-    // ==========================================
-    // 專屬身世支線與共用衛教題庫
-    // ==========================================
     const originStages = {
         '名門嫡女': {
             type: "interaction", imageId: "doctor", character: "太醫 張大人",
@@ -640,7 +264,7 @@
               question: "【夜間猛長期】面對猛長期的頻繁夜奶，您該如何調適？",
               options: [
                   { text: "斥退濃茶，明白這是猛長期，採用躺餵並同步補眠。", feedback: "【眾人 嘆服】夫人明智！躺餵並同步補眠，才是親餵長久之計！", affects: [{char:'doctor', val:20, status:'欣慰'}, {char:'maid', val:15, status:'安心'}], healthVal: 20, expr: 'happy' },
-                  { text: "喝下濃茶，強撐著疲憊的身躯坐直餵奶一整夜。", feedback: "【太醫 驚呼】濃茶咖啡因會影響寶寶，且您嚴重剝奪睡眠險些暈厥！", affects: [{char:'maid', val:-15, status:'心疼'}, {char:'doctor', val:-20, status:'氣急敗壞'}], healthVal: -20, expr: 'shocked' },
+                  { text: "喝下濃茶，強撐著疲憊的身軀坐直餵奶一整夜。", feedback: "【太醫 驚呼】濃茶咖啡因會影響寶寶，且您嚴重剝奪睡眠險些暈厥！", affects: [{char:'maid', val:-15, status:'心疼'}, {char:'doctor', val:-20, status:'氣急敗壞'}], healthVal: -20, expr: 'shocked' },
                   { text: "（大發雷霆）吵死了！不餵了，把孩子丟給下人！", feedback: "【眾人 驚恐】您突然不餵會引發嚴重的石頭奶塞奶啊！", affects: [{char:'maid', val:-30, status:'心寒'}, {char:'doctor', val:-30, status:'心寒'}], healthVal: -30, expr: 'angry' }
             ]},
             { type: "quiz", imageId: "doctor", character: "太醫 張大人",
@@ -688,10 +312,630 @@
         ]
     };
 
-    function replacePlayerVars(text) {
-        if (!text) return "";
-        return text.replace(/{playerName}/g, player.name)
-                   .replace(/{residence}/g, player.residence);
+    // ==========================================
+    // 物理特效與天氣粒子類別
+    // ==========================================
+    class Snowflake {
+        constructor() {
+            this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height;
+            this.size = Math.random() * 3 + 1; this.speedY = Math.random() * 1 + 0.5;
+            this.speedX = (Math.random() - 0.5) * 0.5; this.opacity = Math.random() * 0.5 + 0.3;
+        }
+        update() {
+            this.y += this.speedY; this.x += this.speedX;
+            if (this.y > canvas.height) { this.y = -10; this.x = Math.random() * canvas.width; }
+        }
+        draw(ctx) {
+            ctx.save(); ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+            ctx.shadowColor = 'rgba(200, 220, 255, 0.5)'; ctx.shadowBlur = 5;
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        }
+    }
+
+    class Raindrop {
+        constructor() {
+            this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height;
+            this.speed = Math.random() * 15 + 10; this.length = Math.random() * 20 + 10;
+        }
+        update() {
+            this.y += this.speed;
+            if (this.y > canvas.height) { this.y = -20; this.x = Math.random() * canvas.width; }
+        }
+        draw(ctx) {
+            ctx.strokeStyle = 'rgba(120, 160, 200, 0.5)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x - 2, this.y + this.length); ctx.stroke();
+        }
+    }
+
+    class Petal {
+        constructor() {
+            this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height;
+            this.vx = Math.random() * 1 + 0.5; this.vy = Math.random() * 1 + 1;
+            this.size = Math.random() * 5 + 3; this.angle = Math.random() * Math.PI * 2; this.spin = Math.random() * 0.05 - 0.025;
+        }
+        update() {
+            this.x += this.vx; this.y += this.vy; this.angle += this.spin;
+            if (this.y > canvas.height) { this.y = -10; this.x = Math.random() * canvas.width; }
+        }
+        draw(ctx) {
+            ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
+            ctx.fillStyle = 'rgba(255, 180, 190, 0.8)';
+            ctx.shadowColor = 'rgba(255, 150, 150, 0.5)'; ctx.shadowBlur = 3;
+            ctx.beginPath(); ctx.ellipse(0, 0, this.size, this.size / 2, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        }
+    }
+
+    class Confetti {
+        constructor(x, y, colorCode) {
+            this.x = x; this.y = y;
+            this.vx = (Math.random() - 0.5) * 16; this.vy = (Math.random() - 1) * 16 - 2;
+            this.color = colorCode || ['#ff9999', '#ffcc99', '#99ccff', '#ffcc00'][Math.floor(Math.random() * 4)];
+            this.life = 1.0; this.wobble = Math.random() * Math.PI * 2;
+            this.wobbleSpeed = Math.random() * 0.1 + 0.05;
+            this.rotation = Math.random() * Math.PI * 2; this.rotSpeed = (Math.random() - 0.5) * 0.2;
+        }
+        update() {
+            this.vx *= 0.94; this.vy += 0.4;  
+            this.x += this.vx + Math.sin(this.wobble) * 2.5; this.y += this.vy;
+            this.wobble += this.wobbleSpeed; this.rotation += this.rotSpeed; this.life -= 0.015;
+        }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
+            ctx.translate(this.x, this.y); ctx.rotate(this.rotation);
+            ctx.fillStyle = this.color; ctx.fillRect(-6, -6, 12, 12); ctx.restore();
+        }
+    }
+
+    class DarkAura {
+        constructor(x, y) {
+            this.x = x; this.y = y;
+            this.vx = (Math.random() - 0.5) * 12; this.vy = (Math.random() - 0.5) * 12 - 2;
+            this.size = Math.random() * 15 + 5; this.life = 1.0;
+        }
+        update() {
+            this.x += this.vx; this.y += this.vy;
+            this.vx *= 0.9; this.vy *= 0.9; this.size *= 0.97; this.life -= 0.02;
+        }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
+            ctx.fillStyle = '#6c7a89'; 
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill(); ctx.restore();
+        }
+    }
+
+    class GoldenRing { 
+        constructor(x, y) { this.x = x; this.y = y; this.r = 0; this.life = 1.0; }
+        update() { this.r += (200 - this.r) * 0.15; this.life -= 0.02; }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
+            ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 10 * this.life;
+            ctx.shadowColor = '#ffea00'; ctx.shadowBlur = 15;
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2); ctx.stroke(); ctx.restore();
+        }
+    }
+
+    class RedSlash { 
+        constructor(x, y) { this.x = x; this.y = y; this.life = 1.0; this.progress = 0; }
+        update() { this.progress += (1 - this.progress) * 0.25; this.life -= 0.025; }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y);
+            ctx.strokeStyle = '#ff7777'; ctx.lineWidth = 20; ctx.lineCap = 'round'; 
+            ctx.shadowColor = 'rgba(255, 100, 100, 0.6)'; ctx.shadowBlur = 20;
+            let length = 100 * this.progress;
+            ctx.beginPath(); ctx.moveTo(-length, -length); ctx.lineTo(length, length); ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    class FloatingText {
+        constructor(x, y, text, color) {
+            this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.scale = 0.5;
+        }
+        update() { this.y -= 1.2; this.life -= 0.012; this.scale += (1 - this.scale) * 0.2; }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
+            ctx.translate(this.x, this.y); ctx.scale(this.scale, this.scale);
+            ctx.fillStyle = this.color; ctx.font = 'bold 32px "Kaiti", serif';
+            ctx.shadowColor = 'rgba(255,255,255,0.9)'; ctx.shadowBlur = 8; 
+            ctx.textAlign = 'center'; ctx.fillText(this.text, 0, 0); ctx.restore();
+        }
+    }
+
+    snowflakes = Array.from({ length: 100 }, () => new Snowflake());
+    raindrops = Array.from({ length: 80 }, () => new Raindrop());
+    petals = Array.from({ length: 30 }, () => new Petal());
+
+    // ==========================================
+    // 高清背景動態渲染系統 (亮色系)
+    // ==========================================
+    function getBackground(location) {
+        if (bgCanvases[location]) return bgCanvases[location];
+        let c = document.createElement('canvas');
+        c.width = 800; c.height = 900;
+        let bCtx = c.getContext('2d');
+        
+        // 共用背景繪製函式庫
+        const drawWindow = (ctx, x, y, w, h, isRound = false) => {
+            ctx.fillStyle = "rgba(255, 245, 230, 0.6)"; // 窗紙光暈
+            ctx.shadowColor = "#ffeaa7"; ctx.shadowBlur = 30;
+            ctx.beginPath();
+            if (isRound) ctx.arc(x + w/2, y + h/2, w/2, 0, Math.PI*2);
+            else ctx.rect(x, y, w, h);
+            ctx.fill(); ctx.shadowBlur = 0;
+            ctx.strokeStyle = "#8b5a2b"; ctx.lineWidth = 6;
+            ctx.stroke();
+            // 窗花格
+            ctx.lineWidth = 3;
+            if (isRound) {
+                ctx.beginPath(); ctx.moveTo(x, y+h/2); ctx.lineTo(x+w, y+h/2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(x+w/2, y); ctx.lineTo(x+w/2, y+h); ctx.stroke();
+            } else {
+                for(let i=1; i<4; i++) {
+                    ctx.beginPath(); ctx.moveTo(x, y+h*i/4); ctx.lineTo(x+w, y+h*i/4); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(x+w*i/4, y); ctx.lineTo(x+w*i/4, y+h); ctx.stroke();
+                }
+            }
+        };
+
+        if (location === '華麗正房') {
+            let grad = bCtx.createLinearGradient(0, 0, 0, 900);
+            grad.addColorStop(0, "#fff5e6"); grad.addColorStop(1, "#f5deb3");
+            bCtx.fillStyle = grad; bCtx.fillRect(0,0,800,900);
+            drawWindow(bCtx, 100, 150, 300, 300, true);
+            bCtx.fillStyle = "#a0522d"; bCtx.fillRect(550, 100, 200, 800); // 柱子
+            bCtx.fillStyle = "#8b4513"; bCtx.fillRect(570, 120, 160, 760); 
+            let curtainGrad = bCtx.createLinearGradient(0,0,800,0);
+            curtainGrad.addColorStop(0, "rgba(220, 20, 60, 0.8)"); curtainGrad.addColorStop(1, "rgba(178, 34, 34, 0.4)");
+            bCtx.fillStyle = curtainGrad;
+            bCtx.beginPath(); bCtx.moveTo(0,0); bCtx.quadraticCurveTo(200, 400, 0, 600); bCtx.fill();
+        } 
+        else if (location === '雅致書閣') {
+            let grad = bCtx.createLinearGradient(0, 0, 0, 900);
+            grad.addColorStop(0, "#e8f4f8"); grad.addColorStop(1, "#d1e8e2");
+            bCtx.fillStyle = grad; bCtx.fillRect(0,0,800,900);
+            drawWindow(bCtx, 150, 100, 200, 400, false);
+            // 書架
+            bCtx.fillStyle = "#6b4e31"; bCtx.fillRect(500, 150, 250, 750);
+            bCtx.fillStyle = "#4a3520"; bCtx.fillRect(520, 300, 210, 20); bCtx.fillRect(520, 500, 210, 20);
+            // 書卷
+            bCtx.fillStyle = "#eaddcf"; bCtx.fillRect(540, 220, 30, 80); bCtx.fillRect(580, 240, 40, 60); 
+            bCtx.fillStyle = "#d3b89b"; bCtx.fillRect(550, 400, 150, 100);
+            bCtx.fillStyle = "#2c3e50"; bCtx.fillRect(560, 420, 10, 60); bCtx.fillRect(580, 420, 10, 60);
+        }
+        else if (location === '繁華暖閣' || location === '避風暖閣') {
+            let grad = bCtx.createLinearGradient(0, 0, 0, 900);
+            grad.addColorStop(0, "#fff0f5"); grad.addColorStop(1, "#ffe4e1");
+            bCtx.fillStyle = grad; bCtx.fillRect(0,0,800,900);
+            // 溫暖燈籠
+            const drawLantern = (lx, ly) => {
+                bCtx.fillStyle = "rgba(255, 182, 193, 0.9)"; bCtx.shadowColor = "#ffb6c1"; bCtx.shadowBlur = 40;
+                bCtx.beginPath(); bCtx.ellipse(lx, ly, 40, 60, 0, 0, Math.PI*2); bCtx.fill(); bCtx.shadowBlur = 0;
+                bCtx.fillStyle = "#8b0000"; bCtx.fillRect(lx-15, ly-70, 30, 10); bCtx.fillRect(lx-15, ly+60, 30, 10);
+                bCtx.strokeStyle = "#ff69b4"; bCtx.lineWidth = 2;
+                bCtx.beginPath(); bCtx.moveTo(lx, ly-60); bCtx.lineTo(lx, ly+60); bCtx.stroke();
+            };
+            drawLantern(150, 250); drawLantern(650, 300); drawLantern(400, 150);
+        }
+        else if (location === '膳房外廂') {
+            let grad = bCtx.createLinearGradient(0, 0, 0, 900);
+            grad.addColorStop(0, "#ffebcd"); grad.addColorStop(1, "#ffe4b5");
+            bCtx.fillStyle = grad; bCtx.fillRect(0,0,800,900);
+            // 灶台火光
+            let glow = bCtx.createRadialGradient(200, 700, 50, 200, 700, 500);
+            glow.addColorStop(0, "rgba(255,140,0,0.4)"); glow.addColorStop(1, "rgba(255,140,0,0)");
+            bCtx.fillStyle = glow; bCtx.fillRect(0,0,800,900);
+            // 磚牆
+            bCtx.fillStyle = "#cd853f"; bCtx.fillRect(0, 500, 400, 400); 
+            bCtx.strokeStyle = "#8b4513"; bCtx.lineWidth = 2;
+            for(let y=500; y<900; y+=40) {
+                bCtx.beginPath(); bCtx.moveTo(0, y); bCtx.lineTo(400, y); bCtx.stroke();
+                for(let x=0; x<400; x+=80) {
+                    let offset = (y/40)%2===0 ? 0 : 40;
+                    bCtx.beginPath(); bCtx.moveTo(x+offset, y); bCtx.lineTo(x+offset, y+40); bCtx.stroke();
+                }
+            }
+        } 
+        else if (location === '侯府花園') {
+            let grad = bCtx.createLinearGradient(0, 0, 0, 900);
+            grad.addColorStop(0, "#e0f7fa"); grad.addColorStop(1, "#b2ebf2");
+            bCtx.fillStyle = grad; bCtx.fillRect(0,0,800,900);
+            // 太陽
+            bCtx.fillStyle = "rgba(255, 255, 230, 0.9)"; bCtx.shadowColor = "#ffea00"; bCtx.shadowBlur = 60;
+            bCtx.beginPath(); bCtx.arc(650, 180, 60, 0, Math.PI * 2); bCtx.fill(); bCtx.shadowBlur = 0;
+            // 遠山與樹叢
+            bCtx.fillStyle = "#81c784"; bCtx.beginPath(); bCtx.moveTo(0,900); bCtx.lineTo(0,500); 
+            bCtx.quadraticCurveTo(400,300,800,600); bCtx.lineTo(800,900); bCtx.fill();
+            bCtx.fillStyle = "#4db6ac"; bCtx.beginPath(); bCtx.moveTo(0,900); bCtx.lineTo(0,400);
+            bCtx.quadraticCurveTo(200,300,350,500); bCtx.lineTo(350,900); bCtx.fill();
+        }
+        else {
+            let grad = bCtx.createLinearGradient(0, 0, 0, 900);
+            grad.addColorStop(0, "#fff8dc"); grad.addColorStop(1, "#f5deb3");
+            bCtx.fillStyle = grad; bCtx.fillRect(0,0,800,900);
+            bCtx.fillStyle = "#8b5a2b"; bCtx.fillRect(100, 0, 80, 900); bCtx.fillRect(620, 0, 80, 900); bCtx.fillRect(0, 0, 800, 100);
+        }
+
+        bgCanvases[location] = c;
+        return c;
+    }
+
+    // ==========================================
+    // 高清角色立繪生成器 (Canvas 動態繪製)
+    // ==========================================
+    function getCharacter(role, expr) {
+        let key = `${role}_${expr}`;
+        if (charCanvases[key]) return charCanvases[key];
+        
+        let c = document.createElement('canvas');
+        c.width = 400; c.height = 500;
+        let ctx = c.getContext('2d');
+        ctx.translate(200, 250); // 中心點設為 (0,0)
+
+        // 膚色漸層
+        let skinGrad = ctx.createLinearGradient(0, -100, 0, 100);
+        skinGrad.addColorStop(0, "#fff5ee"); skinGrad.addColorStop(1, "#fadadd");
+        let hairGrad = ctx.createLinearGradient(0, -200, 0, 0);
+        hairGrad.addColorStop(0, "#2c3e50"); hairGrad.addColorStop(1, "#1a252f");
+
+        // 繪製身體底座
+        const drawBody = (color1, color2, width) => {
+            let bodyGrad = ctx.createLinearGradient(0, 100, 0, 250);
+            bodyGrad.addColorStop(0, color1); bodyGrad.addColorStop(1, color2);
+            ctx.fillStyle = bodyGrad;
+            ctx.shadowColor = "rgba(0,0,0,0.15)"; ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.moveTo(-width, 250);
+            ctx.quadraticCurveTo(-width*0.8, 80, 0, 80);
+            ctx.quadraticCurveTo(width*0.8, 80, width, 250);
+            ctx.fill(); ctx.shadowBlur = 0;
+            // 領口裝飾
+            ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(-width*0.4, 120); ctx.lineTo(0, 160); ctx.lineTo(width*0.4, 120); ctx.stroke();
+        };
+
+        // 繪製臉型
+        const drawFace = (fw, fh) => {
+            ctx.fillStyle = skinGrad;
+            ctx.shadowColor = "rgba(0,0,0,0.1)"; ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, fw, fh, 0, 0, Math.PI*2);
+            ctx.fill(); ctx.shadowBlur = 0;
+            // 脖子
+            ctx.fillRect(-fw*0.4, fh*0.8, fw*0.8, 40);
+        };
+
+        // 根據角色設定衣服與臉型
+        let fw = 50, fh = 65;
+        if (role === 'maid') { 
+            drawBody("#ff9a9e", "#fecfef", 120); 
+            drawFace(fw, fh);
+            // 雙丫髻
+            ctx.fillStyle = hairGrad;
+            ctx.beginPath(); ctx.arc(-40, -50, 30, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(40, -50, 30, 0, Math.PI*2); ctx.fill();
+            // 瀏海
+            ctx.beginPath(); ctx.arc(0, -60, 55, 0, Math.PI); ctx.fill();
+        } else if (role === 'chef') { 
+            drawBody("#d4a373", "#faedcd", 140); 
+            drawFace(55, 60);
+            // 廚師帽
+            ctx.fillStyle = "#fefae0";
+            ctx.beginPath(); ctx.ellipse(0, -70, 60, 40, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = "#dda15e"; ctx.fillRect(-45, -45, 90, 20);
+        } else if (role === 'doctor') { 
+            drawBody("#52796f", "#81c784", 130); 
+            drawFace(52, 68);
+            // 太醫帽
+            ctx.fillStyle = "#2f3e46";
+            ctx.fillRect(-40, -90, 80, 50);
+            ctx.fillRect(-60, -50, 120, 15);
+            ctx.fillStyle = "#cad2c5"; ctx.fillRect(-10, -70, 20, 20); // 帽飾
+        } else if (role === 'medic') { 
+            drawBody("#a2d2ff", "#bde0fe", 115); 
+            drawFace(48, 62);
+            // 醫女髮髻
+            ctx.fillStyle = hairGrad;
+            ctx.beginPath(); ctx.ellipse(0, -70, 40, 30, 0, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(0, -60, 50, 0, Math.PI); ctx.fill();
+            // 髮簪
+            ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(20, -70); ctx.lineTo(60, -90); ctx.stroke();
+            ctx.fillStyle = "#ef233c"; ctx.beginPath(); ctx.arc(60, -90, 6, 0, Math.PI*2); ctx.fill();
+        } else if (role === 'baby') {
+            // 嬰兒包巾
+            let cloth = ctx.createLinearGradient(0,0,0,150);
+            cloth.addColorStop(0, "#ffe5b4"); cloth.addColorStop(1, "#ffdab9");
+            ctx.fillStyle = cloth;
+            ctx.beginPath(); ctx.moveTo(-80, 100); ctx.lineTo(80, 100); ctx.lineTo(0, 250); ctx.fill();
+            // 臉
+            drawFace(40, 35);
+            // 稀疏頭髮
+            ctx.strokeStyle = "#555"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(-10, -35); ctx.quadraticCurveTo(0, -45, 10, -35); ctx.stroke();
+        } else if (role.startsWith('player_')) {
+            let f = role.split('_')[1];
+            let c = role.split('_')[2];
+            
+            // 衣服
+            if(c === 'c1') drawBody("#d90429", "#ef233c", 130); // 華貴正紅
+            else if(c === 'c2') drawBody("#1d3557", "#457b9d", 130); // 清雅黛藍
+            else if(c === 'c3') drawBody("#2a9d8f", "#e9c46a", 130); // 溫婉碧綠
+
+            // 臉型
+            if(f === 'f1') { fw = 45; fh = 68; } // 瓜子臉
+            else if(f === 'f2') { fw = 52; fh = 62; } // 鵝蛋臉
+            else if(f === 'f3') { fw = 56; fh = 56; } // 小圓臉
+            drawFace(fw, fh);
+
+            // 華麗主母髮髻
+            ctx.fillStyle = hairGrad;
+            ctx.beginPath(); ctx.ellipse(0, -60, 60, 45, 0, 0, Math.PI*2); ctx.fill(); // 後腦勺
+            ctx.beginPath(); ctx.ellipse(0, -90, 40, 30, 0, 0, Math.PI*2); ctx.fill(); // 高髻
+            // 垂髮
+            ctx.beginPath(); ctx.moveTo(-50, -50); ctx.quadraticCurveTo(-60, 50, -40, 100); ctx.lineTo(-20, -50); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(50, -50); ctx.quadraticCurveTo(60, 50, 40, 100); ctx.lineTo(20, -50); ctx.fill();
+            
+            // 華麗金飾
+            ctx.fillStyle = "#ffd700"; ctx.shadowColor = "#ffea00"; ctx.shadowBlur = 10;
+            ctx.beginPath(); ctx.arc(0, -90, 15, 0, Math.PI*2); ctx.fill(); // 中心冠
+            ctx.beginPath(); ctx.moveTo(-40, -60); ctx.lineTo(-70, -80); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(40, -60); ctx.lineTo(70, -80); ctx.stroke();
+            ctx.fillStyle = "#ff4d4d"; ctx.beginPath(); ctx.arc(-70, -80, 8, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(70, -80, 8, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+        }
+
+        // 繪製表情 (嬰兒除外)
+        if (role !== 'baby') {
+            let ey = -10, my = 25;
+            ctx.strokeStyle = "#4a3b32"; ctx.lineWidth = 3; ctx.lineCap = "round";
+
+            if (expr === 'happy') {
+                // 笑眼
+                ctx.beginPath(); ctx.moveTo(-25, ey); ctx.quadraticCurveTo(-15, ey-10, -5, ey); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(5, ey); ctx.quadraticCurveTo(15, ey-10, 25, ey); ctx.stroke();
+                // 腮紅
+                ctx.fillStyle = "rgba(255, 100, 100, 0.4)"; ctx.shadowBlur = 10; ctx.shadowColor = "#ffb6c1";
+                ctx.beginPath(); ctx.ellipse(-20, ey+15, 12, 6, 0, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.ellipse(20, ey+15, 12, 6, 0, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+                // 開心嘴巴
+                ctx.fillStyle = "#e63946";
+                ctx.beginPath(); ctx.moveTo(-10, my); ctx.quadraticCurveTo(0, my+15, 10, my); ctx.fill();
+            } 
+            else if (expr === 'shocked' || expr === 'angry') {
+                // 睜大眼睛 (溫和版)
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath(); ctx.arc(-15, ey, 6, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.arc(15, ey, 6, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = "#333";
+                ctx.beginPath(); ctx.arc(-15, ey, 3, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(15, ey, 3, 0, Math.PI*2); ctx.fill();
+                // 眉毛微蹙
+                ctx.beginPath(); ctx.moveTo(-25, ey-12); ctx.lineTo(-5, ey-8); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(5, ey-8); ctx.lineTo(25, ey-12); ctx.stroke();
+                // 小嘴微張
+                ctx.fillStyle = "#e63946";
+                ctx.beginPath(); ctx.arc(0, my+5, 4, 0, Math.PI*2); ctx.fill();
+            } 
+            else {
+                // 正常眼
+                ctx.beginPath(); ctx.moveTo(-25, ey); ctx.quadraticCurveTo(-15, ey-3, -5, ey); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(5, ey); ctx.quadraticCurveTo(15, ey-3, 25, ey); ctx.stroke();
+                ctx.fillStyle = "#333";
+                ctx.beginPath(); ctx.arc(-15, ey+2, 3.5, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(15, ey+2, 3.5, 0, Math.PI*2); ctx.fill();
+                // 微笑
+                ctx.beginPath(); ctx.moveTo(-8, my); ctx.quadraticCurveTo(0, my+5, 8, my); ctx.stroke();
+            }
+        } else {
+            // 嬰兒閉眼熟睡
+            ctx.strokeStyle = "#555"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(-12, -5); ctx.quadraticCurveTo(-6, 0, 0, -5); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(4, -5); ctx.quadraticCurveTo(10, 0, 16, -5); ctx.stroke();
+            // 小嘴
+            ctx.fillStyle = "#ffb6c1"; ctx.beginPath(); ctx.arc(2, 10, 3, 0, Math.PI*2); ctx.fill();
+        }
+
+        charCanvases[key] = c;
+        return c;
+    }
+
+    // ==========================================
+    // 亮色系高質感 UI 工具函數
+    // ==========================================
+    const UI = {
+        dialogueBox: { x: 50, y: 550, w: 700, h: 320 }, 
+        btns: [
+            { x: 80, y: 610, w: 640, h: 75 }, 
+            { x: 80, y: 695, w: 640, h: 75 },
+            { x: 80, y: 780, w: 640, h: 75 }
+        ],
+        nameLeft: { x: 230, y: 170, w: 40, h: 40 },
+        nameRight: { x: 480, y: 170, w: 40, h: 40 },
+        faceLeft: { x: 230, y: 290, w: 40, h: 40 },
+        faceRight: { x: 480, y: 290, w: 40, h: 40 },
+        clothLeft: { x: 230, y: 410, w: 40, h: 40 },
+        clothRight: { x: 480, y: 410, w: 40, h: 40 },
+        resLeft: { x: 230, y: 530, w: 40, h: 40 },
+        resRight: { x: 480, y: 530, w: 40, h: 40 },
+        confirmBtn: { x: 280, y: 650, w: 200, h: 60 },
+        interactBtns: [
+            { x: 90, y: 630, w: 280, h: 80 },
+            { x: 430, y: 630, w: 280, h: 80 },
+            { x: 90, y: 740, w: 280, h: 80 },
+            { x: 430, y: 740, w: 280, h: 80 }
+        ]
+    };
+
+    function getLines(context, text, maxWidth) {
+        if (!text) return [];
+        let lines = [];
+        let paragraphs = text.split('\n');
+        for (let p = 0; p < paragraphs.length; p++) {
+            let words = paragraphs[p].split('');
+            let line = '';
+            for (let n = 0; n < words.length; n++) {
+                let testLine = line + words[n];
+                if (context.measureText(testLine).width > maxWidth && n > 0) {
+                    lines.push(line);
+                    line = words[n];
+                } else {
+                    line = testLine;
+                }
+            }
+            if (line.length > 0 || paragraphs.length > 1) {
+                lines.push(line);
+            }
+        }
+        return lines;
+    }
+
+    function isHovered(btn) {
+        return mouse.x >= btn.x && mouse.x <= btn.x + btn.w && mouse.y >= btn.y && mouse.y <= btn.y + btn.h;
+    }
+
+    function drawButton(btnObj, text) {
+        let hover = isHovered(btnObj);
+        // 亮色質感按鈕
+        ctx.fillStyle = hover ? 'rgba(255, 250, 240, 0.98)' : 'rgba(255, 255, 255, 0.92)';
+        ctx.shadowColor = "rgba(139, 107, 74, 0.3)"; ctx.shadowBlur = hover ? 15 : 5;
+        ctx.fillRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h); ctx.shadowBlur = 0;
+        
+        ctx.strokeStyle = hover ? '#c0392b' : '#d4af37'; 
+        ctx.lineWidth = hover ? 3 : 2;
+        ctx.strokeRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
+        
+        ctx.fillStyle = hover ? '#a03b2d' : '#4a3b32'; // 字體顏色
+        ctx.font = 'bold 22px "Kaiti", serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; 
+        let lines = getLines(ctx, text, btnObj.w - 60);
+        let lineHeight = 28;
+        let startY = btnObj.y + (btnObj.h / 2) - ((lines.length - 1) * lineHeight / 2);
+        for (let i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], btnObj.x + btnObj.w / 2, startY + (i * lineHeight));
+        }
+        ctx.textBaseline = 'alphabetic'; 
+    }
+
+    function drawSmallButton(btnObj, text) {
+        let hover = isHovered(btnObj);
+        ctx.fillStyle = hover ? '#fcf8f2' : '#ffffff';
+        ctx.fillRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
+        ctx.strokeStyle = hover ? '#c0392b' : '#d4af37'; ctx.lineWidth = 2;
+        ctx.strokeRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
+        ctx.fillStyle = hover ? '#c0392b' : '#4a3b32'; 
+        ctx.font = 'bold 24px "Kaiti", serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; 
+        ctx.fillText(text, btnObj.x + btnObj.w / 2, btnObj.y + btnObj.h / 2);
+        ctx.textBaseline = 'alphabetic'; 
+    }
+
+    function drawDialogueBox(name, text, showHint = true) {
+        // 白玉琉璃質感的對話框
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.shadowColor = "rgba(100, 80, 60, 0.2)"; ctx.shadowBlur = 20;
+        ctx.fillRect(UI.dialogueBox.x, UI.dialogueBox.y, UI.dialogueBox.w, UI.dialogueBox.h);
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 3;
+        ctx.strokeRect(UI.dialogueBox.x, UI.dialogueBox.y, UI.dialogueBox.w, UI.dialogueBox.h);
+        // 內框線
+        ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)'; ctx.lineWidth = 1;
+        ctx.strokeRect(UI.dialogueBox.x + 8, UI.dialogueBox.y + 8, UI.dialogueBox.w - 16, UI.dialogueBox.h - 16);
+
+        if (name) {
+            // 名字牌
+            let nameGrad = ctx.createLinearGradient(0, UI.dialogueBox.y - 45, 0, UI.dialogueBox.y);
+            nameGrad.addColorStop(0, "#d4af37"); nameGrad.addColorStop(1, "#b58c5c");
+            ctx.fillStyle = nameGrad; 
+            ctx.shadowColor = "rgba(0,0,0,0.2)"; ctx.shadowBlur = 5;
+            ctx.fillRect(UI.dialogueBox.x + 20, UI.dialogueBox.y - 45, 180, 45); ctx.shadowBlur = 0;
+            ctx.fillStyle = '#ffffff'; 
+            ctx.font = 'bold 24px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText(name, UI.dialogueBox.x + 110, UI.dialogueBox.y - 15);
+        }
+
+        // 高亮重點
+        if (text.includes("【調養小記】") || text.includes("【衛教小知識】") || text.includes("【知識】")) {
+            ctx.fillStyle = '#c0392b'; // 酒紅色突出顯示
+        } else {
+            ctx.fillStyle = '#2c241b'; // 黛墨色
+        }
+
+        ctx.font = '22px "Kaiti", serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; 
+        let lines = getLines(ctx, text, UI.dialogueBox.w - 60);
+        let lineHeight = 34; let startY = UI.dialogueBox.y + 40;
+        for (let i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], UI.dialogueBox.x + 30, startY + i * lineHeight);
+        }
+        ctx.textBaseline = 'alphabetic'; 
+
+        if (showHint) {
+            ctx.globalAlpha = (Math.sin(time * 5) + 1) / 2 * 0.5 + 0.5;
+            ctx.fillStyle = '#b58c5c'; ctx.font = 'bold 18px "Kaiti", serif'; ctx.textAlign = 'right';
+            ctx.fillText("▼ 點擊繼續 ▼", UI.dialogueBox.x + UI.dialogueBox.w - 20, UI.dialogueBox.y + UI.dialogueBox.h - 20);
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    function drawDatePanel() {
+        let dayInfo = daysData[Math.min(currentDay - 1, daysData.length - 1)];
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
+        ctx.shadowColor = "rgba(0,0,0,0.1)"; ctx.shadowBlur = 10;
+        ctx.fillRect(20, 20, 300, 110); ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 3; ctx.strokeRect(20, 20, 300, 110);
+        
+        ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 22px "Kaiti", serif'; ctx.textAlign = 'left';
+        ctx.fillText(`【大宋 宣和元年】`, 30, 48);
+        ctx.fillStyle = '#4a3b32'; ctx.font = 'bold 18px "Kaiti", serif';
+        
+        let displayLoc = dayInfo.location === "player_residence" ? player.residence : dayInfo.location;
+        ctx.fillText(`${dayInfo.day} ‧ ${displayLoc}`, 40, 78);
+        
+        let weatherMap = { sunny: "萬里無雲", cloudy: "多雲蔽日", rainy: "霪雨霏霏", snowy: "大雪紛飛" };
+        ctx.fillText(`時令: ${weatherMap[dayInfo.weather]}`, 40, 102);
+    }
+
+    function drawStatsPanel() {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
+        ctx.shadowColor = "rgba(0,0,0,0.1)"; ctx.shadowBlur = 10;
+        ctx.fillRect(520, 20, 260, 230); ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 3; ctx.strokeRect(520, 20, 260, 230);
+        
+        ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 22px "Kaiti", serif'; ctx.textAlign = 'left';
+        ctx.fillText(`【府邸後宅人際關係】`, 535, 48);
+
+        let startY = 85;
+        for (const key in player.affections) {
+            let stat = player.affections[key];
+            stat.current += (stat.target - stat.current) * 0.05;
+            
+            let statusColor = '#4a3b32';
+            if(stat.target <= 0) statusColor = '#e74c3c'; 
+            else if(['嫌隙', '心寒', '厭惡', '覺得荒唐', '心灰意冷', '瑟瑟發抖', '氣急敗壞', '慌張', '恐懼', '強烈厭惡', '疑惑'].includes(stat.status)) statusColor = '#c0392b';
+            else if(['崇拜', '崇敬', '死心塌地', '情同姐妹', '醫者父母心', '敬畏', '知音', '安心', '欣慰', '敬佩'].includes(stat.status)) statusColor = '#27ae60';
+
+            // 畫小頭像
+            let imgExpr = 'normal';
+            if(statusColor === '#e74c3c' || statusColor === '#c0392b') imgExpr = 'angry';
+            if(statusColor === '#27ae60') imgExpr = 'happy';
+
+            let imgCanvas = getCharacter(key, imgExpr);
+            ctx.save();
+            ctx.beginPath(); ctx.arc(543, startY - 5, 15, 0, Math.PI*2); ctx.clip(); // 圓形遮罩
+            ctx.fillStyle = "#eadecc"; ctx.fill();
+            ctx.drawImage(imgCanvas, 150, 80, 100, 100, 528, startY - 20, 30, 30); 
+            ctx.restore();
+            ctx.strokeStyle = "#d4af37"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(543, startY - 5, 15, 0, Math.PI*2); ctx.stroke();
+
+            ctx.fillStyle = '#4a3b32'; ctx.font = 'bold 15px "Kaiti", serif'; ctx.textAlign = 'left';
+            ctx.fillText(`${stat.name}`, 565, startY);
+            ctx.fillStyle = statusColor; ctx.fillText(`[${stat.status}]`, 635, startY);
+            
+            ctx.fillStyle = '#eadecc'; ctx.fillRect(565, startY + 8, 200, 8); // 背景條
+            ctx.fillStyle = stat.color; 
+            let barWidth = Math.max(0, (stat.current / stat.max) * 200);
+            ctx.fillRect(565, startY + 8, barWidth, 8); 
+            startY += 45;
+        }
     }
 
     // ==========================================
@@ -728,7 +972,6 @@
     }
 
     function checkEarlyGameOver() {
-        // 如果好感度極低，改為觸發體諒歇息結局，不給予嚴厲懲罰
         for (const key in player.affections) {
             if (player.affections[key].target <= 10) {
                 isEarlyGameOver = true;
@@ -739,7 +982,7 @@
     }
 
     function applyChoices(chosenOption) {
-        let offsetY = 250;
+        let offsetY = 300;
         let hasPositive = false;
         let hasNegative = false;
         
@@ -751,7 +994,7 @@
             targetChar.target = Math.max(0, Math.min(targetChar.max, targetChar.target + r.val)); 
             targetChar.status = r.status;
             
-            let color = r.val >= 0 ? targetChar.color : "#6c7a89";
+            let color = r.val >= 0 ? targetChar.color : "#c0392b";
             let sign = r.val >= 0 ? "+" : "";
             let text = `${targetChar.name} ${sign}${r.val}`;
             
@@ -760,16 +1003,16 @@
 
             if(r.val > 0) {
                 hasPositive = true;
-                for (let i = 0; i < 20; i++) particles.push(new Confetti(canvas.width / 2, 400, targetChar.color));
+                for (let i = 0; i < 20; i++) particles.push(new Confetti(canvas.width / 2, 450, targetChar.color));
             } else {
                 hasNegative = true;
-                for (let i = 0; i < 15; i++) particles.push(new DarkAura(canvas.width / 2, 400));
+                for (let i = 0; i < 15; i++) particles.push(new DarkAura(canvas.width / 2, 450));
             }
         });
 
         if(chosenOption.affects.length === 0 && chosenOption.healthVal < 0) {
             hasNegative = true;
-            for (let i = 0; i < 15; i++) particles.push(new DarkAura(canvas.width / 2, 400));
+            for (let i = 0; i < 15; i++) particles.push(new DarkAura(canvas.width / 2, 450));
         }
 
         if (hasPositive) { 
@@ -780,7 +1023,7 @@
         if (currentExpr === 'angry' || currentExpr === 'shocked') {
             if (hasNegative) {
                 shakeAmount = 5; 
-                flashAlpha = 0.2; flashColor = '#e74c3c'; 
+                flashAlpha = 0.2; flashColor = '#ffb3ba'; 
                 specialEffects.push(new RedSlash(canvas.width / 2, 350));
             }
         }
@@ -820,7 +1063,7 @@
         if (isEarlyGameOver) {
             endingType = 'bad';
             finalEndingTitle = "【結局：稍作歇息，尋求支援】"; 
-            finalEndingColor = "#d66b7a"; // 柔和的紅色
+            finalEndingColor = "#d66b7a";
             let charName = player.affections[earlyGameOverCharId].name;
             let firstSceneText = "";
             if(earlyGameOverCharId === 'maid') firstSceneText = `「${player.name}...您看來太累了。這幾日您為了少爺操碎了心，請讓奴婢多為您分擔一些吧，您先好好歇息。」`;
@@ -871,24 +1114,9 @@
         }
     }
 
-    // 繪製角色 (支援缺圖時的 Fallback 佔位符)
-    function drawCharacter(roleId, expr, x, y, width, height) {
-        let targetKey = `${roleId}_${expr}`;
-        let img = loadedImages.chars[targetKey] || loadedImages.chars[`${roleId}_normal`];
-        
-        if (img && img.complete && img.naturalWidth > 0) {
-            ctx.drawImage(img, x, y, width, height);
-        } else {
-            // Fallback (若尚未放圖片的佔位顯示)
-            ctx.fillStyle = 'rgba(230, 220, 200, 0.8)';
-            ctx.fillRect(x + 20, y + 40, width - 40, height - 40);
-            ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 2;
-            ctx.strokeRect(x + 20, y + 40, width - 40, height - 40);
-            ctx.fillStyle = '#a03b2d'; ctx.font = '20px Kaiti'; ctx.textAlign = 'center';
-            ctx.fillText("尚無圖片", x + width / 2, y + height / 2);
-            ctx.font = '14px Kaiti';
-            ctx.fillText(targetKey, x + width / 2, y + height / 2 + 30);
-        }
+    function replacePlayerVars(text) {
+        if (!text) return "";
+        return text.replace(/{playerName}/g, player.name).replace(/{residence}/g, player.residence);
     }
 
     // --- 主動畫迴圈 ---
@@ -904,18 +1132,10 @@
         let currentLoc = '侯府正廳';
         let currentDayWeather = 'sunny';
         
-        // 結局天氣覆蓋機制
         if (currentState === STATES.ENDING_ANIMATION || currentState === STATES.END) {
-            if (endingType === 'bad') {
-                currentLoc = '避風暖閣';
-                currentDayWeather = 'rainy';
-            } else if (endingType === 'good') {
-                currentLoc = '侯府花園';
-                currentDayWeather = 'sunny';
-            } else {
-                currentLoc = '雅致書閣';
-                currentDayWeather = 'cloudy';
-            }
+            if (endingType === 'bad') { currentLoc = '避風暖閣'; currentDayWeather = 'rainy'; } 
+            else if (endingType === 'good') { currentLoc = '侯府花園'; currentDayWeather = 'sunny'; } 
+            else { currentLoc = '雅致書閣'; currentDayWeather = 'cloudy'; }
         } else if (currentState === STATES.CREATION) {
             currentLoc = residences[selectedResIndex];
         } else if (currentState !== STATES.START) {
@@ -924,27 +1144,15 @@
             currentDayWeather = currentDayData.weather;
         }
 
-        // 渲染高清背景圖片
-        let bgImg = loadedImages.bg[currentLoc];
-        if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
-            // 裁切或拉伸填滿畫布
-            ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-        } else {
-            // 預設亮色系漸層背景 (如果還沒放圖)
-            let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            grad.addColorStop(0, '#fdfaf2');
-            grad.addColorStop(1, '#eadecc');
-            ctx.fillStyle = grad; 
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#b58c5c'; ctx.font = '30px Kaiti'; ctx.textAlign = 'center';
-            ctx.fillText(`(請於 assets/bg/ 加入背景圖片)`, canvas.width/2, canvas.height/2);
-        }
+        // 渲染高畫質背景
+        let bgImg = getBackground(currentLoc);
+        ctx.drawImage(bgImg, 0, 0);
         
-        if (currentState === STATES.DAY_TRANSITION || currentState === STATES.STORY || currentState === STATES.QUESTION || currentState === STATES.FEEDBACK || currentState === STATES.CREATION || currentState === STATES.INTERACT_CHOICE || currentState === STATES.INTERACT_RESULT || currentState === STATES.ENDING_ANIMATION || currentState === STATES.END) {
+        if (currentState === STATES.DAY_TRANSITION || currentState === STATES.STORY || currentState === STATES.QUESTION || currentState === STATES.FEEDBACK || currentState === STATES.CREATION || currentState === STATES.INTERACT_CHOICE || currentState === STATES.ENDING_ANIMATION || currentState === STATES.END) {
             if (currentDayWeather === 'sunny') {
                 let sunGrad = ctx.createRadialGradient(canvas.width, 0, 50, canvas.width, 0, 600);
-                sunGrad.addColorStop(0, 'rgba(255, 250, 230, 0.6)');
-                sunGrad.addColorStop(0.5, 'rgba(255, 230, 180, 0.15)');
+                sunGrad.addColorStop(0, 'rgba(255, 250, 230, 0.8)');
+                sunGrad.addColorStop(0.5, 'rgba(255, 230, 180, 0.2)');
                 sunGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
                 ctx.fillStyle = sunGrad;
                 ctx.beginPath(); ctx.arc(canvas.width, 0, 600, 0, Math.PI*2); ctx.fill();
@@ -965,65 +1173,59 @@
             }
         }
 
-        if (currentState === STATES.ENDING_ANIMATION && endingType === 'bad') {
-            ctx.fillStyle = 'rgba(214, 107, 122, 0.15)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-
         if (currentState === STATES.ENDING_ANIMATION && endingType === 'good') {
             if(Math.random() < 0.15) particles.push(new Confetti(canvas.width/2 + (Math.random()-0.5)*400, 50));
         }
-
-        ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 4; ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
 
         if (currentState !== STATES.START && currentState !== STATES.CREATION && ctx.save && currentState !== STATES.END && currentState !== STATES.ENDING_ANIMATION && currentState !== STATES.DAY_TRANSITION) {
             drawDatePanel(); drawStatsPanel();
         }
 
         if (currentState === STATES.START) {
+            // 亮色高雅開始畫面
             ctx.fillStyle = 'rgba(255, 250, 240, 0.85)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 50px "Kaiti", serif'; ctx.textAlign = 'center';
-            ctx.shadowColor = 'rgba(160, 59, 45, 0.2)'; ctx.shadowBlur = 10;
-            ctx.fillText("汴京娘子調養記", canvas.width / 2, 300);
-            ctx.fillStyle = '#3a2818'; ctx.font = '24px "Kaiti", serif';
-            ctx.shadowBlur = 0; 
-            ctx.fillText("— 七日奇遇溫馨陪伴版 —", canvas.width / 2, 360);
-            drawButton({x: 300, y: 500, w: 200, h: 60}, "進入侯府");
+            ctx.fillStyle = '#c0392b'; ctx.font = 'bold 55px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(192, 57, 43, 0.3)'; ctx.shadowBlur = 15;
+            ctx.fillText("汴京娘子調養記", canvas.width / 2, 300); ctx.shadowBlur = 0;
+            ctx.fillStyle = '#4a3b32'; ctx.font = '26px "Kaiti", serif';
+            ctx.fillText("— 七日奇遇 高清陪伴版 —", canvas.width / 2, 360);
+            drawButton({x: 250, y: 500, w: 300, h: 70}, "進入侯府");
         } 
         else if (currentState === STATES.CREATION) {
             ctx.fillStyle = 'rgba(255, 250, 240, 0.85)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 36px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillStyle = '#c0392b'; ctx.font = 'bold 40px "Kaiti", serif'; ctx.textAlign = 'center';
             ctx.fillText("【主母設定】", canvas.width / 2, 80);
 
-            ctx.fillStyle = '#3a2818'; ctx.font = 'bold 24px "Kaiti", serif';
+            ctx.fillStyle = '#4a3b32'; ctx.font = 'bold 24px "Kaiti", serif';
             
             ctx.fillText("名諱", 160, 195);
             drawSmallButton(UI.nameLeft, "<"); drawSmallButton(UI.nameRight, ">");
-            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 26px "Kaiti", serif';
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 28px "Kaiti", serif';
             ctx.fillText(namesList[selectedNameIndex], 355, 195);
 
-            ctx.fillStyle = '#3a2818';
+            ctx.fillStyle = '#4a3b32'; ctx.font = 'bold 24px "Kaiti", serif';
             ctx.fillText("臉型", 160, 315);
             drawSmallButton(UI.faceLeft, "<"); drawSmallButton(UI.faceRight, ">");
-            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 26px "Kaiti", serif';
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 28px "Kaiti", serif';
             ctx.fillText(faceNames[selectedFaceIndex], 355, 315);
 
-            ctx.fillStyle = '#3a2818';
+            ctx.fillStyle = '#4a3b32'; ctx.font = 'bold 24px "Kaiti", serif';
             ctx.fillText("服飾", 160, 435);
             drawSmallButton(UI.clothLeft, "<"); drawSmallButton(UI.clothRight, ">");
-            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 26px "Kaiti", serif';
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 28px "Kaiti", serif';
             ctx.fillText(clothNames[selectedClothIndex], 355, 435);
 
-            ctx.fillStyle = '#3a2818';
+            ctx.fillStyle = '#4a3b32'; ctx.font = 'bold 24px "Kaiti", serif';
             ctx.fillText("出身", 160, 555);
             drawSmallButton(UI.resLeft, "<"); drawSmallButton(UI.resRight, ">");
-            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 26px "Kaiti", serif';
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 28px "Kaiti", serif';
             ctx.fillText(backgrounds[selectedResIndex], 355, 555);
 
             let bScale = 1.3 + Math.sin(time * 2.5) * 0.015;
             let previewId = `player_${faceKeys[selectedFaceIndex]}_${clothKeys[selectedClothIndex]}`;
+            let charCanvas = getCharacter(previewId, 'normal');
             ctx.save(); ctx.translate(650, 400); ctx.scale(1, bScale);
-            drawCharacter(previewId, 'normal', -150, -200, 300, 400);
+            ctx.drawImage(charCanvas, -150, -200, 300, 400);
             ctx.restore();
 
             drawButton(UI.confirmBtn, "踏入侯府");
@@ -1031,21 +1233,23 @@
         else if (currentState === STATES.DAY_TRANSITION) {
             let dayInfo = daysData[Math.min(currentDay - 1, daysData.length - 1)];
             ctx.fillStyle = 'rgba(255, 250, 240, 0.9)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 46px "Kaiti", serif'; ctx.textAlign = 'center';
-            ctx.fillText(`產後第 ${currentDay} 天`, canvas.width / 2, 350);
-            ctx.fillStyle = '#3a2818'; ctx.font = '24px "Kaiti", serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+            ctx.fillStyle = '#c0392b'; ctx.font = 'bold 46px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(192, 57, 43, 0.2)'; ctx.shadowBlur = 10;
+            ctx.fillText(`產後第 ${currentDay} 天`, canvas.width / 2, 350); ctx.shadowBlur = 0;
+            ctx.fillStyle = '#4a3b32'; ctx.font = '26px "Kaiti", serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
             let lines = getLines(ctx, dayInfo.event, 500);
-            for(let i=0; i<lines.length; i++){ ctx.fillText(lines[i], 150, 450 + (i * 35)); }
+            for(let i=0; i<lines.length; i++){ ctx.fillText(lines[i], 150, 450 + (i * 38)); }
             ctx.textBaseline = 'alphabetic';
             ctx.globalAlpha = (Math.sin(time * 5) + 1) / 2 * 0.5 + 0.5;
-            ctx.fillStyle = '#b58c5c'; ctx.font = 'bold 20px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillStyle = '#d4af37'; ctx.font = 'bold 22px "Kaiti", serif'; ctx.textAlign = 'center';
             ctx.fillText("▼ 點擊開始調理 ▼", canvas.width / 2, 700);
             ctx.globalAlpha = 1.0;
         }
         else if (currentState === STATES.INTERACT_CHOICE) {
             let bScale = 1 + Math.sin(time * 2.5) * 0.015;
+            let charCanvas = getCharacter(player.avatarId, 'normal');
             ctx.save(); ctx.translate(canvas.width / 2, 100 + 125); ctx.scale(1, bScale);
-            drawCharacter(player.avatarId, 'normal', -150, -200, 300, 400);
+            ctx.drawImage(charCanvas, -150, -200, 300, 400);
             ctx.restore();
 
             drawDialogueBox("【後宅相處】", "今日剛用完發奶湯水，趁著孩兒安穩睡去，夫人打算找誰商議調理細節？", false);
@@ -1062,23 +1266,24 @@
                            (scene.role === player.avatarId ? player.name : (player.affections[scene.role] ? player.affections[scene.role].name : "未知"));
             
             let roleId = scene.role;
+            let charCanvas = getCharacter(roleId, scene.expr || 'normal');
+            
             ctx.save(); ctx.translate(canvas.width / 2, 100 + bounceY + 125);
             let bScale = 1 + Math.sin(time * 2.5) * 0.015;
             ctx.scale(1, bScale);
-            drawCharacter(roleId, scene.expr || 'normal', -150, -200, 300, 400);
+            ctx.drawImage(charCanvas, -150, -200, 300, 400);
             ctx.restore();
             
-            let tagY = 350 + bounceY;
-            ctx.fillStyle = 'rgba(252, 248, 242, 0.95)'; ctx.fillRect(canvas.width/2 - 80, tagY, 160, 40);
-            ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 2; ctx.strokeRect(canvas.width/2 - 80, tagY, 160, 40);
-            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 22px "Kaiti", serif'; ctx.textAlign = 'center';
-            ctx.fillText(charName, canvas.width/2, tagY + 27);
+            let tagY = 380 + bounceY;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'; ctx.fillRect(canvas.width/2 - 90, tagY, 180, 45);
+            ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 2; ctx.strokeRect(canvas.width/2 - 90, tagY, 180, 45);
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 24px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText(charName, canvas.width/2, tagY + 32);
             
             drawDialogueBox(scene.name, scene.text);
         }
         else if (currentState !== STATES.END) {
             const stage = currentStage;
-            
             let displayRole = stage.imageId || 'baby';
             let displayCharName = stage.character || '系統';
             let displayStoryText = stage.story[currentStoryLine];
@@ -1106,17 +1311,19 @@
             let drawExpr = (currentState === STATES.FEEDBACK) ? currentExpr : 'normal';
             if(drawExpr === 'angry') drawExpr = 'normal'; // 溫和化處理
 
+            let charCanvas = getCharacter(displayRole, drawExpr);
+
             ctx.save(); ctx.translate(canvas.width / 2, 100 + bounceY + 125);
             let bScale = 1 + Math.sin(time * (drawExpr === 'angry' ? 5.0 : 2.5)) * 0.015;
             ctx.scale(1, bScale);
-            drawCharacter(displayRole, drawExpr, -150, -200, 300, 400);
+            ctx.drawImage(charCanvas, -150, -200, 300, 400);
             ctx.restore();
             
-            let tagY = 350 + bounceY;
-            ctx.fillStyle = 'rgba(252, 248, 242, 0.95)'; ctx.fillRect(canvas.width/2 - 80, tagY, 160, 40);
-            ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 2; ctx.strokeRect(canvas.width/2 - 80, tagY, 160, 40);
-            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 22px "Kaiti", serif'; ctx.textAlign = 'center';
-            ctx.fillText(displayCharName, canvas.width/2, tagY + 27);
+            let tagY = 380 + bounceY;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'; ctx.fillRect(canvas.width/2 - 90, tagY, 180, 45);
+            ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 2; ctx.strokeRect(canvas.width/2 - 90, tagY, 180, 45);
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 24px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText(displayCharName, canvas.width/2, tagY + 32);
 
             if (currentState === STATES.STORY) {
                 drawDialogueBox("【劇情與調養】", displayStoryText);
@@ -1126,7 +1333,7 @@
                 drawDialogueBox(qTitle, qText, false);
                 stage.options.forEach((opt, idx) => {
                     let optText = replacePlayerVars(opt.text);
-                    drawButton(UI.btns[idx], "方式 " + (idx+1) + "：" + optText);
+                    drawButton(UI.btns[idx], "選項 " + (idx+1) + "：" + optText);
                 });
             } 
             else if (currentState === STATES.FEEDBACK) {
@@ -1136,25 +1343,26 @@
         
         if (currentState === STATES.END) {
             let overlayGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            overlayGrad.addColorStop(0, 'rgba(255, 250, 240, 0.75)');
-            overlayGrad.addColorStop(0.5, 'rgba(255, 250, 240, 0.9)');
+            overlayGrad.addColorStop(0, 'rgba(255, 250, 240, 0.8)');
+            overlayGrad.addColorStop(0.5, 'rgba(255, 250, 240, 0.95)');
             overlayGrad.addColorStop(1, 'rgba(255, 250, 240, 1)');
             ctx.fillStyle = overlayGrad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            ctx.fillStyle = finalEndingColor; ctx.font = 'bold 44px "Kaiti", serif'; ctx.textAlign = 'center';
-            ctx.fillText(finalEndingTitle, canvas.width / 2, 300);
+            ctx.fillStyle = finalEndingColor; ctx.font = 'bold 48px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(0,0,0,0.1)'; ctx.shadowBlur = 10;
+            ctx.fillText(finalEndingTitle, canvas.width / 2, 300); ctx.shadowBlur = 0;
             
-            ctx.fillStyle = '#3a2818'; ctx.font = '24px "Kaiti", serif'; ctx.textAlign = 'center';
-            ctx.fillText("大宋調養生活告一段落...", canvas.width / 2, 370);
+            ctx.fillStyle = '#4a3b32'; ctx.font = '26px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText("大宋調養生活告一段落...", canvas.width / 2, 380);
 
             ctx.textAlign = 'left'; ctx.textBaseline = 'top';
             let lines = getLines(ctx, replacePlayerVars(endingScenes[endingScenes.length-1].text), 560);
             for(let i=0; i<lines.length; i++) {
-                ctx.fillText(lines[i], 120, 430 + (i * 38));
+                ctx.fillText(lines[i], 120, 450 + (i * 38));
             }
             ctx.textBaseline = 'alphabetic';
-            drawButton({x: 300, y: 700, w: 200, h: 60}, "再行體驗");
+            drawButton({x: 250, y: 700, w: 300, h: 70}, "再行體驗");
         }
 
         particles = particles.filter(p => p.life > 0); particles.forEach(p => { p.update(); p.draw(ctx); });
@@ -1176,7 +1384,7 @@
         mouse.x = (clientX - rect.left) * scaleX; mouse.y = (clientY - rect.top) * scaleY;
 
         if (currentState === STATES.START) {
-            if (isHovered({x: 300, y: 500, w: 200, h: 60})) {
+            if (isHovered({x: 250, y: 500, w: 300, h: 70})) {
                 currentState = STATES.CREATION;
             }
         } 
@@ -1241,7 +1449,7 @@
             if (isEarlyGameOver) {
                 generateEndingScenes();
                 currentState = STATES.ENDING_ANIMATION;
-                flashAlpha = 0.3; flashColor = '#fdf5e6'; 
+                flashAlpha = 0.3; flashColor = '#fff5e6'; 
             } else {
                 currentDay++;
                 currentStoryLine = 0; currentExpr = 'normal'; 
@@ -1257,14 +1465,14 @@
             if (currentEndingSceneIndex >= endingScenes.length) {
                 currentState = STATES.END; 
                 if (endingType === 'good') { flashAlpha = 0.5; flashColor = '#ffffff'; }
-                else if (endingType === 'bad') { flashAlpha = 0.4; flashColor = '#fdf5e6'; } 
+                else if (endingType === 'bad') { flashAlpha = 0.4; flashColor = '#fff5e6'; } 
             } else {
                 let scene = endingScenes[currentEndingSceneIndex];
                 if(scene.expr === 'happy') { flashAlpha = 0.2; flashColor = '#ffffff'; }
             }
         }
         else if (currentState === STATES.END) {
-             if (isHovered({x: 300, y: 700, w: 200, h: 60})) currentState = STATES.START;
+             if (isHovered({x: 250, y: 700, w: 300, h: 70})) currentState = STATES.START;
         }
     }
 
