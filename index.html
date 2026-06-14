@@ -3,23 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>汴京娘子調養記 - 終極衛教大作戰</title>
+    <title>汴京娘子調養記 - 七日奇遇養成版</title>
     <style>
         body {
-            margin: 0; padding: 0;
-            display: flex; justify-content: center; align-items: center;
-            height: 100vh; background-color: #0b1021;
-            font-family: 'Kaiti', '標楷體', serif; overflow: hidden; 
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f5eedc; /* 亮色系：溫暖的宣紙底色 */
+            background-image: radial-gradient(#e8ddc5 1px, transparent 0);
+            background-size: 20px 20px;
+            font-family: 'Kaiti', '標楷體', serif;
+            overflow: hidden; 
         }
         #game-container {
-            width: 100%; height: 100%;
-            display: flex; justify-content: center; align-items: center;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         canvas {
-            max-width: 100vw; max-height: 100vh; aspect-ratio: 8 / 9;
-            background-color: #080c1a; box-shadow: 0 0 40px rgba(0,0,0,0.9);
-            border: 4px solid #8b6b4a; border-radius: 8px;
-            object-fit: contain; touch-action: none;
+            max-width: 100vw;
+            max-height: 100vh;
+            aspect-ratio: 8 / 9;
+            background-color: #faf5eb; /* 畫布預設亮底色 */
+            box-shadow: 0 10px 40px rgba(100, 70, 40, 0.3); /* 柔和的咖啡色陰影 */
+            border: 4px solid #b58c5c; /* 明亮的燙金/棕木色邊框 */
+            border-radius: 8px;
+            object-fit: contain;
+            touch-action: none;
         }
     </style>
 </head>
@@ -30,202 +45,312 @@
 </div>
 
 <script>
-    // ==========================================
-    // 1. 音效引擎 (修復瀏覽器 Autoplay 阻擋)
-    // ==========================================
-    let audioCtx = null;
-    const SE = {
-        init: function() {
-            if (!audioCtx) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                if (AudioContext) audioCtx = new AudioContext();
-            }
-            if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume().catch(()=>{});
-            }
-        },
-        playTone: function(freq, type, duration, vol=0.1) {
-            if (!audioCtx || audioCtx.state !== 'running') return;
-            try {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(); osc.stop(audioCtx.currentTime + duration);
-            } catch(e) {}
-        },
-        hover: function() { this.playTone(600, 'sine', 0.1, 0.05); },
-        click: function() { this.playTone(400, 'square', 0.1, 0.1); },
-        win: function() {
-            setTimeout(() => this.playTone(523.25, 'sine', 0.2, 0.1), 0);
-            setTimeout(() => this.playTone(659.25, 'sine', 0.2, 0.1), 100);
-            setTimeout(() => this.playTone(783.99, 'sine', 0.4, 0.1), 200);
-        },
-        fail: function() {
-            setTimeout(() => this.playTone(200, 'sawtooth', 0.3, 0.1), 0);
-            setTimeout(() => this.playTone(150, 'sawtooth', 0.4, 0.1), 150);
-        },
-        save: function() {
-            setTimeout(() => this.playTone(880, 'sine', 0.1, 0.05), 0);
-            setTimeout(() => this.playTone(1760, 'sine', 0.3, 0.05), 100);
-        }
-    };
-
-    // ==========================================
-    // 2. 系統變數與設定
-    // ==========================================
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    const STATES = { START: 0, CREATION: 1, DAY_TRANSITION: 2, MAP_EXPLORE: 3, STORY: 4, QUESTION: 5, FEEDBACK: 6, ENDING_ANIMATION: 7, END: 8 };
+    const STATES = { START: 0, CREATION: 1, DAY_TRANSITION: 2, INTERACT_CHOICE: 3, STORY: 4, QUESTION: 5, FEEDBACK: 6, ENDING_ANIMATION: 7, END: 8 };
     let currentState = STATES.START;
-    let currentDay = 1, currentStage = null, currentStoryLine = 0, selectedOptionFeedback = "", time = 0;
-    let mouse = {x: -100, y: -100}, lastHoveredBtn = null, currentExpr = 'normal', shakeAmount = 0;
-    let flashAlpha = 0, flashColor = '#ffffff';
-    let particles = [], floatingTexts = [], specialEffects = [], bgCanvases = {};
-    let isEarlyGameOver = false, earlyGameOverCharId = "", endingScenes = [], currentEndingSceneIndex = 0;
-    let finalEndingTitle = "", finalEndingColor = "", endingType = "normal";
-
-    const namesList = ['盛明蘭','沈珍珠','王語嫣','趙盼兒','李清照'], faceKeys = ['f1','f2','f3'], clothKeys = ['c1','c2','c3'], backgrounds = ['名門嫡女','書香世家','富商巨賈'], residences = ['華麗正房', '雅致書閣', '繁華暖閣'];
-    let selectedNameIndex = 0, selectedFaceIndex = 0, selectedClothIndex = 0, selectedResIndex = 0;
     
+    let currentDay = 1;
+    let currentStage = null;
+    let currentStoryLine = 0;
+    let selectedOptionFeedback = "";
+    
+    let mouse = { x: -100, y: -100 };
+    let time = 0;
+    
+    let currentExpr = 'normal'; 
+    let shakeAmount = 0;
+    let flashAlpha = 0;
+    let flashColor = '#ffffff';
+    let particles = [];
+    let floatingTexts = [];
+    let specialEffects = [];
+    
+    let snowflakes = [];
+    let raindrops = [];
+    let petals = [];
+
+    let isEarlyGameOver = false;
+    let earlyGameOverCharId = "";
+    let endingScenes = [];
+    let currentEndingSceneIndex = 0;
+    let finalEndingTitle = "";
+    let finalEndingColor = "";
+    let endingType = "normal"; 
+
+    // 自訂選單
+    const namesList = ['盛明蘭', '沈珍珠', '王語嫣', '趙盼兒', '李清照'];
+    const faceKeys = ['f1', 'f2', 'f3'];
+    const faceNames = ['清冷瓜子臉', '端莊鵝蛋臉', '嬌潤小圓臉'];
+    const clothKeys = ['c1', 'c2', 'c3'];
+    const clothNames = ['華貴正紅', '清雅黛藍', '溫婉碧綠'];
+    const backgrounds = ['名門嫡女', '書香世家', '富商巨賈'];
+    const residences = ['華麗正房', '雅致書閣', '繁華暖閣'];
+    
+    let selectedNameIndex = 0;
+    let selectedFaceIndex = 0;
+    let selectedClothIndex = 0;
+    let selectedResIndex = 0;
+
     let player = {
-        name: "主母夫人", origin: "名門嫡女", avatarId: "player_f1_c1", knowledgeScore: 50, residence: "華麗正房",
+        name: "主母夫人",
+        avatarId: "player_f1_c1",
+        origin: "名門嫡女",
+        residence: "華麗正房",
+        knowledgeScore: 50, 
         affections: {
-            maid: { name: "丫鬟 春桃", current: 50, target: 50, max: 100, color: "#e8b4b8", status: "平淡" },
-            chef: { name: "膳房 總管", current: 50, target: 50, max: 100, color: "#8c7a6b", status: "平淡" },
-            doctor: { name: "太醫 張大人", current: 50, target: 50, max: 100, color: "#3a4f41", status: "平淡" },
-            medic: { name: "醫女 蘇氏", current: 50, target: 50, max: 100, color: "#8caeb8", status: "平淡" }
+            maid: { name: "丫鬟 春桃", current: 50, target: 50, max: 100, color: "#d66b7a", status: "平淡" },
+            chef: { name: "膳房 總管", current: 50, target: 50, max: 100, color: "#8c5b36", status: "平淡" },
+            doctor: { name: "太醫 張大人", current: 50, target: 50, max: 100, color: "#2d5e40", status: "平淡" },
+            medic: { name: "醫女 蘇氏", current: 50, target: 50, max: 100, color: "#457b9d", status: "平淡" }
         }
     };
 
+    // 7天固定情境
     const daysData = [
-        { d: "產後第一天", w: "sunny", l: "主母臥房", e: "初為人母，您抱著剛出生的孩兒，心中充滿溫暖。大宋的陽光和煦，是個好兆頭。" },
-        { d: "產後第二天", w: "cloudy", l: "侯府花園", e: "天色微陰。小少爺的哭聲劃破了寧靜，新手母親與下人們共同努力照護。" },
-        { d: "產後第三天", w: "rainy", l: "侯府正廳", e: "窗外下起淅瀝小雨。今日似乎有來自府外或長輩的特別關切與愛護。" }, 
-        { d: "產後第四天", w: "snowy", l: "主母臥房", e: "氣溫驟降，飛雪連天。隨著奶水自然分泌，您的雙乳感到沉重與奇妙的變化。" },
-        { d: "產後第五天", w: "sunny", l: "膳房外廂", e: "大雪初霽。看著寶寶喝奶，大家都在為夫人的發奶膳食出謀劃策。" },
-        { d: "產後第六天", w: "cloudy", l: "主母臥房", e: "夜裡微風徐徐。寶寶頻繁的需要考驗著您的溫柔與耐性。" },
-        { d: "產後第七天", w: "sunny", l: "侯府花園", e: "轉眼已至第七日，您在大家的陪伴下，順利完成了初期的調養適應。" }
+        { day: "產後第一天", weather: "sunny", location: "player_residence", event: "初為人母，您抱著剛出生的孩兒，心中充滿溫暖。大宋的陽光和煦，是個好兆頭。" },
+        { day: "產後第二天", weather: "cloudy", location: "侯府花園", event: "天色微陰。小少爺的哭聲劃破了寧靜，新手母親與下人們共同努力照護。" },
+        { day: "產後第三天", weather: "rainy", location: "侯府正廳", event: "窗外下起淅瀝小雨。今日似乎有來自府外或長輩的特別關切與愛護。" }, 
+        { day: "產後第四天", weather: "snowy", location: "主母臥房", event: "氣溫驟降，飛雪連天。隨著奶水自然分泌，您的雙乳感到沉重與奇妙的變化。" },
+        { day: "產後第五天", weather: "sunny", location: "膳房外廂", event: "大雪初霽。看著寶寶喝奶，大家都在為夫人的發奶膳食出謀劃策。" },
+        { day: "產後第六天", weather: "cloudy", location: "主母臥房", event: "夜裡微風徐徐。寶寶頻繁的需要考驗著您的溫柔與耐性。" },
+        { day: "產後第七天", weather: "sunny", location: "侯府花園", event: "轉眼已至第七日，您在大家的陪伴下，順利完成了初期的調養適應。" }
     ];
 
     let questionPools = { maid: [], chef: [], doctor: [], medic: [] };
 
     // ==========================================
-    // 3. 儲存與讀取系統 (localStorage)
+    // 資源載入系統 (Images Assets Loading)
     // ==========================================
-    const SAVE_KEY = "BianjingNursingGameSaveV6";
-
-    function saveGame() {
-        const saveData = {
-            currentDay, player, questionPools,
-            selectedNameIndex, selectedFaceIndex, selectedClothIndex, selectedResIndex
-        };
-        localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
-        floatingTexts.push(new FloatingText(canvas.width / 2, 200, "【進度已儲存】", "#66ff66"));
-        SoundEngine.save();
-    }
-
-    function loadGame() {
-        const savedStr = localStorage.getItem(SAVE_KEY);
-        if (savedStr) {
-            try {
-                const data = JSON.parse(savedStr);
-                currentDay = data.currentDay; player = data.player; questionPools = data.questionPools;
-                selectedNameIndex = data.selectedNameIndex; selectedFaceIndex = data.selectedFaceIndex;
-                selectedClothIndex = data.selectedClothIndex; selectedResIndex = data.selectedResIndex;
-                isEarlyGameOver = false; currentState = STATES.DAY_TRANSITION;
-                SoundEngine.win(); return true;
-            } catch (e) { return false; }
+    const ASSET_URLS = {
+        bg: {
+            '華麗正房': './assets/bg/room1.jpg',
+            '雅致書閣': './assets/bg/room2.jpg',
+            '繁華暖閣': './assets/bg/room3.jpg',
+            '膳房外廂': './assets/bg/kitchen.jpg',
+            '侯府花園': './assets/bg/garden.jpg',
+            '侯府正廳': './assets/bg/hall.jpg',
+            '避風暖閣': './assets/bg/warm.jpg',
+            '主母臥房': './assets/bg/room1.jpg' // Fallback
+        },
+        chars: {
+            'baby_normal': './assets/chars/baby.png'
         }
-        return false;
+    };
+
+    // 自動生成角色與表情的路徑表
+    const rolesBase = ['maid', 'chef', 'doctor', 'medic'];
+    const expressionsList = ['normal', 'happy', 'shocked', 'angry'];
+    
+    rolesBase.forEach(role => {
+        expressionsList.forEach(expr => {
+            ASSET_URLS.chars[`${role}_${expr}`] = `./assets/chars/${role}_${expr}.png`;
+        });
+    });
+    
+    // 生成玩家路徑表
+    faceKeys.forEach(f => {
+        clothKeys.forEach(c => {
+            expressionsList.forEach(expr => {
+                ASSET_URLS.chars[`player_${f}_${c}_${expr}`] = `./assets/chars/player_${f}_${c}_${expr}.png`;
+            });
+        });
+    });
+
+    const loadedImages = { bg: {}, chars: {} };
+
+    // 實例化載入圖片
+    for (let key in ASSET_URLS.bg) {
+        let img = new Image();
+        img.src = ASSET_URLS.bg[key];
+        loadedImages.bg[key] = img;
     }
 
-    function hasSaveGame() { return localStorage.getItem(SAVE_KEY) !== null; }
+    for (let key in ASSET_URLS.chars) {
+        let img = new Image();
+        img.src = ASSET_URLS.chars[key];
+        loadedImages.chars[key] = img;
+    }
 
     // ==========================================
-    // 4. 物理特效與天氣粒子類別
+    // 物理特效與天氣粒子類別 (適應亮色背景)
     // ==========================================
     class Snowflake {
-        constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height; this.size = Math.random() * 3 + 1; this.speedY = Math.random() * 1 + 0.5; this.speedX = (Math.random() - 0.5) * 0.5; this.opacity = Math.random() * 0.5 + 0.3; }
-        update() { this.y += this.speedY; this.x += this.speedX; if (this.y > canvas.height) { this.y = -10; this.x = Math.random() * canvas.width; } }
-        draw(ctx) { ctx.save(); ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+        constructor() {
+            this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height;
+            this.size = Math.random() * 3 + 1; this.speedY = Math.random() * 1 + 0.5;
+            this.speedX = (Math.random() - 0.5) * 0.5; this.opacity = Math.random() * 0.6 + 0.4;
+        }
+        update() {
+            this.y += this.speedY; this.x += this.speedX;
+            if (this.y > canvas.height) { this.y = -10; this.x = Math.random() * canvas.width; }
+        }
+        draw(ctx) {
+            ctx.save(); ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+            ctx.shadowColor = '#dcdcdc'; ctx.shadowBlur = 2; // 讓雪花在亮色背景稍微明顯
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        }
     }
 
     class Raindrop {
-        constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height; this.speed = Math.random() * 15 + 10; this.length = Math.random() * 20 + 10; }
-        update() { this.y += this.speed; if (this.y > canvas.height) { this.y = -20; this.x = Math.random() * canvas.width; } }
-        draw(ctx) { ctx.strokeStyle = 'rgba(150, 180, 220, 0.4)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x - 2, this.y + this.length); ctx.stroke(); }
+        constructor() {
+            this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height;
+            this.speed = Math.random() * 15 + 10; this.length = Math.random() * 20 + 10;
+        }
+        update() {
+            this.y += this.speed;
+            if (this.y > canvas.height) { this.y = -20; this.x = Math.random() * canvas.width; }
+        }
+        draw(ctx) {
+            ctx.strokeStyle = 'rgba(120, 150, 180, 0.6)'; ctx.lineWidth = 2; // 較深的雨滴
+            ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x - 2, this.y + this.length); ctx.stroke();
+        }
     }
 
     class Petal {
-        constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height; this.vx = Math.random() * 1 + 0.5; this.vy = Math.random() * 1 + 1; this.size = Math.random() * 5 + 3; this.angle = Math.random() * Math.PI * 2; this.spin = Math.random() * 0.05 - 0.025; }
-        update() { this.x += this.vx; this.y += this.vy; this.angle += this.spin; if (this.y > canvas.height) { this.y = -10; this.x = Math.random() * canvas.width; } }
-        draw(ctx) { ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle); ctx.fillStyle = 'rgba(230, 180, 190, 0.5)'; ctx.beginPath(); ctx.ellipse(0, 0, this.size, this.size / 2, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+        constructor() {
+            this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height - canvas.height;
+            this.vx = Math.random() * 1 + 0.5; this.vy = Math.random() * 1 + 1;
+            this.size = Math.random() * 5 + 3; this.angle = Math.random() * Math.PI * 2; this.spin = Math.random() * 0.05 - 0.025;
+        }
+        update() {
+            this.x += this.vx; this.y += this.vy; this.angle += this.spin;
+            if (this.y > canvas.height) { this.y = -10; this.x = Math.random() * canvas.width; }
+        }
+        draw(ctx) {
+            ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
+            ctx.fillStyle = 'rgba(240, 128, 128, 0.7)'; // 鮮豔的櫻花粉
+            ctx.beginPath(); ctx.ellipse(0, 0, this.size, this.size / 2, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        }
     }
 
     class Confetti {
-        constructor(x, y, colorCode) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 16; this.vy = (Math.random() - 1) * 16 - 2; this.color = colorCode || ['#cc4444', '#44cc44', '#4488cc', '#eebb44'][Math.floor(Math.random() * 4)]; this.life = 1.0; this.wobble = Math.random() * Math.PI * 2; this.wobbleSpeed = Math.random() * 0.1 + 0.05; this.rotation = Math.random() * Math.PI * 2; this.rotSpeed = (Math.random() - 0.5) * 0.2; }
-        update() { this.vx *= 0.94; this.vy += 0.4; this.x += this.vx + Math.sin(this.wobble) * 2.5; this.y += this.vy; this.wobble += this.wobbleSpeed; this.rotation += this.rotSpeed; this.life -= 0.015; }
-        draw(ctx) { ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y); ctx.rotate(this.rotation); ctx.fillStyle = this.color; ctx.fillRect(-6, -6, 12, 12); ctx.restore(); }
+        constructor(x, y, colorCode) {
+            this.x = x; this.y = y;
+            this.vx = (Math.random() - 0.5) * 16; this.vy = (Math.random() - 1) * 16 - 2;
+            this.color = colorCode || ['#ff7b7b', '#f9a826', '#4ecdc4', '#ffcf59'][Math.floor(Math.random() * 4)];
+            this.life = 1.0; this.wobble = Math.random() * Math.PI * 2;
+            this.wobbleSpeed = Math.random() * 0.1 + 0.05;
+            this.rotation = Math.random() * Math.PI * 2; this.rotSpeed = (Math.random() - 0.5) * 0.2;
+        }
+        update() {
+            this.vx *= 0.94; this.vy += 0.4;  
+            this.x += this.vx + Math.sin(this.wobble) * 2.5; this.y += this.vy;
+            this.wobble += this.wobbleSpeed; this.rotation += this.rotSpeed; this.life -= 0.015;
+        }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
+            ctx.translate(this.x, this.y); ctx.rotate(this.rotation);
+            ctx.fillStyle = this.color; ctx.fillRect(-6, -6, 12, 12); ctx.restore();
+        }
     }
 
     class DarkAura {
-        constructor(x, y) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 12; this.vy = (Math.random() - 0.5) * 12 - 2; this.size = Math.random() * 15 + 5; this.life = 1.0; }
-        update() { this.x += this.vx; this.y += this.vy; this.vx *= 0.9; this.vy *= 0.9; this.size *= 0.97; this.life -= 0.02; }
-        draw(ctx) { ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = '#94a1b2'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
+        constructor(x, y) {
+            this.x = x; this.y = y;
+            this.vx = (Math.random() - 0.5) * 12; this.vy = (Math.random() - 0.5) * 12 - 2;
+            this.size = Math.random() * 15 + 5; this.life = 1.0;
+        }
+        update() {
+            this.x += this.vx; this.y += this.vy;
+            this.vx *= 0.9; this.vy *= 0.9; this.size *= 0.97; this.life -= 0.02;
+        }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
+            ctx.fillStyle = '#6c7a89'; 
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill(); ctx.restore();
+        }
     }
 
     class GoldenRing { 
         constructor(x, y) { this.x = x; this.y = y; this.r = 0; this.life = 1.0; }
         update() { this.r += (200 - this.r) * 0.15; this.life -= 0.02; }
-        draw(ctx) { ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 10 * this.life; ctx.shadowColor = '#ffea00'; ctx.shadowBlur = 15; ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2); ctx.stroke(); ctx.restore(); }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
+            ctx.strokeStyle = '#f39c12'; ctx.lineWidth = 10 * this.life;
+            ctx.shadowColor = '#f1c40f'; ctx.shadowBlur = 15;
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2); ctx.stroke(); ctx.restore();
+        }
     }
 
     class RedSlash { 
         constructor(x, y) { this.x = x; this.y = y; this.life = 1.0; this.progress = 0; }
         update() { this.progress += (1 - this.progress) * 0.25; this.life -= 0.025; }
-        draw(ctx) { ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y); ctx.strokeStyle = '#ffbbbb'; ctx.lineWidth = 20; ctx.lineCap = 'round'; ctx.shadowColor = 'rgba(255, 150, 150, 0.6)'; ctx.shadowBlur = 20; let length = 100 * this.progress; ctx.beginPath(); ctx.moveTo(-length, -length); ctx.lineTo(length, length); ctx.stroke(); ctx.restore(); }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y);
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 20; ctx.lineCap = 'round'; 
+            ctx.shadowColor = 'rgba(231, 76, 60, 0.6)'; ctx.shadowBlur = 20;
+            let length = 100 * this.progress;
+            ctx.beginPath(); ctx.moveTo(-length, -length); ctx.lineTo(length, length); ctx.stroke();
+            ctx.restore();
+        }
     }
 
     class FloatingText {
-        constructor(x, y, text, color) { this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.scale = 0.5; }
+        constructor(x, y, text, color) {
+            this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.scale = 0.5;
+        }
         update() { this.y -= 1.2; this.life -= 0.012; this.scale += (1 - this.scale) * 0.2; }
-        draw(ctx) { ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y); ctx.scale(this.scale, this.scale); ctx.fillStyle = this.color; ctx.font = 'bold 30px "Kaiti", serif'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; ctx.textAlign = 'center'; ctx.fillText(this.text, 0, 0); ctx.restore(); }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
+            ctx.translate(this.x, this.y); ctx.scale(this.scale, this.scale);
+            ctx.fillStyle = this.color; ctx.font = 'bold 30px "Kaiti", serif';
+            ctx.shadowColor = 'rgba(255,255,255,0.8)'; ctx.shadowBlur = 6; // 亮色底改白邊陰影
+            ctx.textAlign = 'center'; ctx.fillText(this.text, 0, 0); ctx.restore();
+        }
     }
 
-    let snowflakes = Array.from({ length: 100 }, () => new Snowflake());
-    let raindrops = Array.from({ length: 80 }, () => new Raindrop());
-    let petals = Array.from({ length: 30 }, () => new Petal());
+    snowflakes = Array.from({ length: 80 }, () => new Snowflake());
+    raindrops = Array.from({ length: 60 }, () => new Raindrop());
+    petals = Array.from({ length: 30 }, () => new Petal());
 
     // ==========================================
-    // 5. 畫面渲染與 UI 工具
+    // 亮色系 UI 相關工具函數
     // ==========================================
     const UI = {
-        box: {x: 80, y: 350, w: 640, h: 300}, 
-        btns: [{x: 80, y: 680, w: 640, h: 60}, {x: 80, y: 760, w: 640, h: 60}, {x: 80, y: 840, w: 640, h: 60}],
-        nL: {x: 230, y: 300, w: 40, h: 40}, nR: {x: 480, y: 300, w: 40, h: 40}, 
-        rL: {x: 230, y: 400, w: 40, h: 40}, rR: {x: 480, y: 400, w: 40, h: 40},
-        fL: {x: 230, y: 500, w: 40, h: 40}, fR: {x: 480, y: 500, w: 40, h: 40},
-        cL: {x: 230, y: 600, w: 40, h: 40}, cR: {x: 480, y: 600, w: 40, h: 40},
-        cfBtn: {x: 300, y: 700, w: 200, h: 60},
-        maps: {maid:{x:80,y:400,w:300,h:180,n:"【夫人臥房】",d:"尋找春桃"}, chef:{x:420,y:400,w:300,h:180,n:"【侯府膳房】",d:"傳喚總管"}, doc:{x:80,y:620,w:300,h:180,n:"【前院廳堂】",d:"召見太醫"}, med:{x:420,y:620,w:300,h:180,n:"【廂房醫署】",d:"私下請教"}}
+        dialogueBox: { x: 50, y: 520, w: 700, h: 350 }, 
+        btns: [
+            { x: 80, y: 590, w: 640, h: 80 }, 
+            { x: 80, y: 680, w: 640, h: 80 },
+            { x: 80, y: 770, w: 640, h: 80 }
+        ],
+        nameLeft: { x: 230, y: 170, w: 40, h: 40 },
+        nameRight: { x: 480, y: 170, w: 40, h: 40 },
+        faceLeft: { x: 230, y: 290, w: 40, h: 40 },
+        faceRight: { x: 480, y: 290, w: 40, h: 40 },
+        clothLeft: { x: 230, y: 410, w: 40, h: 40 },
+        clothRight: { x: 480, y: 410, w: 40, h: 40 },
+        resLeft: { x: 230, y: 530, w: 40, h: 40 },
+        resRight: { x: 480, y: 530, w: 40, h: 40 },
+        confirmBtn: { x: 280, y: 650, w: 200, h: 60 },
+        interactBtns: [
+            { x: 90, y: 600, w: 280, h: 80 },
+            { x: 430, y: 600, w: 280, h: 80 },
+            { x: 90, y: 710, w: 280, h: 80 },
+            { x: 430, y: 710, w: 280, h: 80 }
+        ]
     };
 
-    function getLines(ctx, text, maxWidth) {
+    function getLines(context, text, maxWidth) {
         if (!text) return [];
-        let lines = [], paragraphs = text.split('\n');
-        for (let p of paragraphs) {
+        let lines = [];
+        let paragraphs = text.split('\n');
+        for (let p = 0; p < paragraphs.length; p++) {
+            let words = paragraphs[p].split('');
             let line = '';
-            for (let char of p) {
-                let testLine = line + char;
-                if (ctx.measureText(testLine).width > maxWidth && line.length > 0) {
-                    lines.push(line); line = char;
-                } else { line = testLine; }
+            for (let n = 0; n < words.length; n++) {
+                let testLine = line + words[n];
+                if (context.measureText(testLine).width > maxWidth && n > 0) {
+                    lines.push(line);
+                    line = words[n];
+                } else {
+                    line = testLine;
+                }
             }
-            if (line.length > 0 || paragraphs.length > 1) lines.push(line);
+            if (line.length > 0 || paragraphs.length > 1) {
+                lines.push(line);
+            }
         }
         return lines;
     }
@@ -233,493 +358,927 @@
     function isHovered(btn) {
         return mouse.x >= btn.x && mouse.x <= btn.x + btn.w && mouse.y >= btn.y && mouse.y <= btn.y + btn.h;
     }
-    
-    function drawButton(btnObj, text, isSmall=false) {
-        let hover = isHovered(btnObj); 
-        if(hover && lastHoveredBtn !== text){ SoundEngine.hover(); lastHoveredBtn = text; } 
-        else if(!hover && lastHoveredBtn === text){ lastHoveredBtn = null; }
-        
-        ctx.fillStyle = hover ? '#a6855b' : 'rgba(44,36,27,0.9)'; 
+
+    function drawButton(btnObj, text) {
+        let hover = isHovered(btnObj);
+        // 亮色按鈕樣式
+        ctx.fillStyle = hover ? 'rgba(235, 215, 185, 0.95)' : 'rgba(255, 248, 238, 0.9)';
         ctx.fillRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
-        ctx.strokeStyle = hover ? '#fff' : '#cdae77'; 
-        ctx.lineWidth = isSmall ? 2 : (hover ? 3 : 2); 
+        ctx.strokeStyle = hover ? '#c0392b' : '#b58c5c'; 
+        ctx.lineWidth = hover ? 3 : 2;
         ctx.strokeRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
-        ctx.fillStyle = hover ? '#fff' : '#f4ebd0'; 
-        ctx.font = isSmall ? 'bold 24px Kaiti' : '20px Kaiti'; 
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         
-        if(isSmall) {
-            ctx.fillText(text, btnObj.x + btnObj.w/2, btnObj.y + btnObj.h/2); 
-        } else { 
-            let ls = getLines(ctx, text, btnObj.w - 40); 
-            let sy = btnObj.y + btnObj.h/2 - (ls.length-1)*13; 
-            for(let i=0; i<ls.length; i++) ctx.fillText(ls[i], btnObj.x+btnObj.w/2, sy+i*26); 
-        } 
-        ctx.textBaseline='alphabetic';
+        ctx.fillStyle = '#3a2818'; // 深棕色字體
+        ctx.font = 'bold 22px "Kaiti", serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; 
+        let lines = getLines(ctx, text, btnObj.w - 60);
+        let lineHeight = 30;
+        let startY = btnObj.y + (btnObj.h / 2) - ((lines.length - 1) * lineHeight / 2);
+        for (let i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], btnObj.x + btnObj.w / 2, startY + (i * lineHeight));
+        }
+        ctx.textBaseline = 'alphabetic'; 
     }
 
-    function drawMapZone(zoneObj, roleId) {
-        let hover = isHovered(zoneObj);
-        if (hover && lastHoveredBtn !== zoneObj.name) { SoundEngine.hover(); lastHoveredBtn = zoneObj.name; }
-        else if (!hover && lastHoveredBtn === zoneObj.name) { lastHoveredBtn = null; }
-
-        ctx.fillStyle = hover ? 'rgba(100, 70, 50, 0.9)' : 'rgba(44, 36, 27, 0.85)';
-        ctx.fillRect(zoneObj.x, zoneObj.y, zoneObj.w, zoneObj.h);
-        ctx.strokeStyle = hover ? '#ffffff' : '#cdae77'; 
-        ctx.lineWidth = hover ? 4 : 2;
-        ctx.strokeRect(zoneObj.x, zoneObj.y, zoneObj.w, zoneObj.h);
-        
-        ctx.fillStyle = hover ? '#ffffff' : '#ffdd66'; 
-        ctx.font = 'bold 32px Kaiti'; ctx.textAlign = 'center'; 
-        ctx.fillText(zoneObj.name, zoneObj.x + zoneObj.w / 2, zoneObj.y + 80);
-        
-        ctx.fillStyle = '#f4ebd0'; ctx.font = '22px Kaiti'; 
-        ctx.fillText(zoneObj.desc, zoneObj.x + zoneObj.w / 2, zoneObj.y + 130);
-        
-        let img = loadedImages[roleId] && loadedImages[roleId]['normal'];
-        if(img && img.complete) {
-            ctx.drawImage(img, 40, 30, 120, 120, zoneObj.x + zoneObj.w/2 - 40, zoneObj.y + 110, 80, 80);
-        }
+    function drawSmallButton(btnObj, text) {
+        let hover = isHovered(btnObj);
+        ctx.fillStyle = hover ? 'rgba(235, 215, 185, 0.95)' : 'rgba(255, 248, 238, 0.9)';
+        ctx.fillRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
+        ctx.strokeStyle = hover ? '#c0392b' : '#b58c5c'; 
+        ctx.lineWidth = 2;
+        ctx.strokeRect(btnObj.x, btnObj.y, btnObj.w, btnObj.h);
+        ctx.fillStyle = '#3a2818'; 
+        ctx.font = 'bold 24px "Kaiti", serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; 
+        ctx.fillText(text, btnObj.x + btnObj.w / 2, btnObj.y + btnObj.h / 2);
+        ctx.textBaseline = 'alphabetic'; 
     }
 
     function drawDialogueBox(name, text, showHint = true) {
-        ctx.fillStyle = 'rgba(44, 36, 27, 0.95)'; 
-        ctx.fillRect(UI.box.x, UI.box.y, UI.box.w, UI.box.h); 
-        ctx.strokeStyle = '#cdae77'; ctx.lineWidth = 3; 
-        ctx.strokeRect(UI.box.x, UI.box.y, UI.box.w, UI.box.h);
-        ctx.strokeStyle = 'rgba(205,174,119,0.3)'; ctx.lineWidth = 1; 
-        ctx.strokeRect(UI.box.x+10, UI.box.y+10, UI.box.w-20, UI.box.h-20);
+        // 亮色對話框底板
+        ctx.fillStyle = 'rgba(252, 248, 242, 0.95)';
+        ctx.fillRect(UI.dialogueBox.x, UI.dialogueBox.y, UI.dialogueBox.w, UI.dialogueBox.h);
+        ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 3;
+        ctx.strokeRect(UI.dialogueBox.x, UI.dialogueBox.y, UI.dialogueBox.w, UI.dialogueBox.h);
+        // 內部細線裝飾
+        ctx.strokeStyle = 'rgba(181, 140, 92, 0.3)'; ctx.lineWidth = 1;
+        ctx.strokeRect(UI.dialogueBox.x + 6, UI.dialogueBox.y + 6, UI.dialogueBox.w - 12, UI.dialogueBox.h - 12);
 
-        if(name) { 
-            ctx.fillStyle = '#cdae77'; 
-            ctx.fillRect(UI.box.x + UI.box.w/2 - 120, UI.box.y - 25, 240, 50); 
-            ctx.fillStyle = '#2c241b'; ctx.font = 'bold 26px Kaiti'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(name, UI.box.x + UI.box.w/2, UI.box.y); 
-            ctx.textBaseline = 'alphabetic';
+        if (name) {
+            ctx.fillStyle = '#b58c5c'; 
+            ctx.fillRect(UI.dialogueBox.x - 2, UI.dialogueBox.y - 40, 200, 42);
+            ctx.fillStyle = '#ffffff'; 
+            ctx.font = 'bold 24px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText(name, UI.dialogueBox.x + 100, UI.dialogueBox.y - 12);
         }
-        
-        ctx.fillStyle = (text.includes("衛教小知識") || text.includes("調養小記")) ? '#ffdd66' : '#f4ebd0'; 
-        ctx.font = '24px Kaiti'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; 
-        let ls = getLines(ctx, text, UI.box.w - 60);
-        for(let i=0; i<ls.length; i++) ctx.fillText(ls[i], UI.box.x+30, UI.box.y+50+i*34); 
-        ctx.textBaseline = 'alphabetic';
-        
-        if(showHint) { 
-            ctx.globalAlpha = (Math.sin(time*5)+1)/2*0.5+0.5; 
-            ctx.fillStyle = '#cdae77'; ctx.font = '18px Kaiti'; ctx.textAlign = 'right'; 
-            ctx.fillText("▼ 點擊畫面繼續 ▼", UI.box.x+UI.box.w-20, UI.box.y+UI.box.h-20); 
-            ctx.globalAlpha = 1.0; 
+
+        // 高亮文字使用酒紅或深棕色
+        if (text.includes("【調養小記】") || text.includes("【衛教小知識】") || text.includes("【知識】")) {
+            ctx.fillStyle = '#a03b2d'; // 酒紅色突出顯示
+        } else {
+            ctx.fillStyle = '#3a2818'; // 深墨色文字
+        }
+
+        ctx.font = '22px "Kaiti", serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; 
+        let lines = getLines(ctx, text, UI.dialogueBox.w - 60);
+        let lineHeight = 32; let startY = UI.dialogueBox.y + 35;
+        for (let i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], UI.dialogueBox.x + 30, startY + i * lineHeight);
+        }
+        ctx.textBaseline = 'alphabetic'; 
+
+        if (showHint) {
+            ctx.globalAlpha = (Math.sin(time * 5) + 1) / 2 * 0.5 + 0.5;
+            ctx.fillStyle = '#b58c5c'; ctx.font = '16px "Kaiti", serif'; ctx.textAlign = 'right';
+            ctx.fillText("▼ 點擊畫面繼續 ▼", UI.dialogueBox.x + UI.dialogueBox.w - 20, UI.dialogueBox.y + UI.dialogueBox.h - 15);
+            ctx.globalAlpha = 1.0;
         }
     }
 
     function drawDatePanel() {
-        let d = daysData[Math.min(currentDay - 1, daysData.length - 1)];
-        ctx.fillStyle = 'rgba(44, 36, 27, 0.85)'; ctx.fillRect(20, 20, 300, 110); 
-        ctx.strokeStyle = '#cdae77'; ctx.lineWidth = 2; ctx.strokeRect(20, 20, 300, 110);
-        ctx.fillStyle = '#ffdd66'; ctx.font = 'bold 22px Kaiti'; ctx.textAlign = 'left'; 
-        ctx.fillText('【大宋 宣和元年】', 30, 50);
-        ctx.fillStyle = '#f4ebd0'; ctx.font = '20px Kaiti'; 
-        ctx.fillText(d.day, 40, 85); 
-        ctx.fillText(`天氣: ${{sunny:"晴朗", cloudy:"多雲", rainy:"陰雨", snowy:"飛雪"}[d.weather]}`, 160, 85);
+        let dayInfo = daysData[Math.min(currentDay - 1, daysData.length - 1)];
+        ctx.fillStyle = 'rgba(252, 248, 242, 0.9)'; ctx.fillRect(20, 20, 300, 110);
+        ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 2; ctx.strokeRect(20, 20, 300, 110);
+        
+        ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 20px "Kaiti", serif'; ctx.textAlign = 'left';
+        ctx.fillText(`【大宋 宣和元年】`, 30, 45);
+        ctx.fillStyle = '#3a2818'; ctx.font = '18px "Kaiti", serif';
+        
+        let displayLoc = dayInfo.location === "player_residence" ? player.residence : dayInfo.location;
+        ctx.fillText(`${dayInfo.day} ‧ ${displayLoc}`, 40, 75);
+        
+        let weatherMap = { sunny: "萬里無雲", cloudy: "多雲蔽日", rainy: "霪雨霏霏", snowy: "大雪紛飛" };
+        ctx.fillText(`時令: ${weatherMap[dayInfo.weather]}`, 40, 100);
     }
 
     function drawStatsPanel() {
-        ctx.fillStyle = 'rgba(44, 36, 27, 0.85)'; ctx.fillRect(480, 20, 300, 210); 
-        ctx.strokeStyle = '#8b6b4a'; ctx.strokeRect(480, 20, 300, 210);
-        ctx.fillStyle = '#eebb44'; ctx.font = 'bold 22px Kaiti'; ctx.textAlign = 'left'; 
-        ctx.fillText('【府邸人際關係】', 500, 50);
+        ctx.fillStyle = 'rgba(252, 248, 242, 0.9)'; ctx.fillRect(520, 20, 260, 230);
+        ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 2; ctx.strokeRect(520, 20, 260, 230);
         
-        let sY = 90; 
-        for(let k in player.affections) {
-            let s = player.affections[k]; 
-            s.current += (s.target - s.current) * 0.05;
-            let col = '#f4ebd0'; 
-            if(s.target <= 0) col = '#ff2222'; 
-            else if(['嫌隙','心寒','厭惡','荒唐','心灰意冷','發抖','氣急敗壞','慌張','恐懼','強烈厭惡'].some(x => s.status.includes(x))) col = '#ff6666'; 
-            else if(['崇拜','崇敬','死心塌地','情同姐妹','父母心','敬畏','知音','安心','欣慰','敬佩'].some(x => s.status.includes(x))) col = '#66ff66';
+        ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 20px "Kaiti", serif'; ctx.textAlign = 'left';
+        ctx.fillText(`【府邸後宅人際關係】`, 535, 45);
+
+        let startY = 80;
+        for (const key in player.affections) {
+            let stat = player.affections[key];
+            stat.current += (stat.target - stat.current) * 0.05;
             
-            ctx.fillStyle = '#f4ebd0'; ctx.font = '18px Kaiti'; ctx.fillText(s.name, 500, sY); 
-            ctx.fillStyle = col; ctx.textAlign = 'right'; ctx.fillText(`[${s.status}]`, 760, sY); ctx.textAlign = 'left';
-            ctx.fillStyle = '#333'; ctx.fillRect(500, sY+10, 260, 8); 
-            ctx.fillStyle = s.color; ctx.fillRect(500, sY+10, Math.max(0, (s.current/s.max)*260), 8); 
-            sY += 40;
+            let statusColor = '#3a2818';
+            if(stat.target <= 0) statusColor = '#e74c3c'; 
+            else if(['嫌隙', '心寒', '厭惡', '覺得荒唐', '心灰意冷', '瑟瑟發抖', '氣急敗壞', '慌張', '恐懼', '強烈厭惡', '疑惑'].includes(stat.status)) statusColor = '#c0392b';
+            else if(['崇拜', '崇敬', '死心塌地', '情同姐妹', '醫者父母心', '敬畏', '知音', '安心', '欣慰', '敬佩'].includes(stat.status)) statusColor = '#27ae60';
+
+            // 畫小頭像 (如果找不到圖就畫個框)
+            let imgExpr = 'normal';
+            if(statusColor === '#e74c3c' || statusColor === '#c0392b') imgExpr = 'angry';
+            if(statusColor === '#27ae60') imgExpr = 'happy';
+
+            let charImgKey = `${key}_${imgExpr}`;
+            let img = loadedImages.chars[charImgKey] || loadedImages.chars[`${key}_normal`];
+            
+            if (img && img.complete && img.naturalWidth > 0) {
+                try { 
+                    // 假設圖示是 400x500，取頭部
+                    ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight * 0.5, 528, startY - 20, 30, 30); 
+                } catch(e) {}
+            } else {
+                ctx.fillStyle = '#e0d8c8'; ctx.fillRect(528, startY - 20, 30, 30);
+            }
+
+            ctx.fillStyle = '#3a2818'; ctx.font = 'bold 15px "Kaiti", serif'; ctx.textAlign = 'left';
+            ctx.fillText(`${stat.name}`, 565, startY);
+            ctx.fillStyle = statusColor; ctx.fillText(`[${stat.status}]`, 635, startY);
+            
+            ctx.fillStyle = '#e0d8c8'; ctx.fillRect(565, startY + 8, 200, 8); // 背景條
+            ctx.fillStyle = stat.color; 
+            let barWidth = Math.max(0, (stat.current / stat.max) * 200);
+            ctx.fillRect(565, startY + 8, barWidth, 8); 
+            startY += 45;
         }
     }
-
-    function getBackground(loc) {
-        if(bgCanvases[loc]) return bgCanvases[loc]; 
-        let c = document.createElement('canvas'); c.width = 800; c.height = 900; let bx = c.getContext('2d');
-        if(loc.includes('臥房') || loc.includes('正房')){ 
-            let g = bx.createLinearGradient(0,0,0,900); g.addColorStop(0,"#2a1e12"); g.addColorStop(1,"#1a0f0a"); bx.fillStyle=g; bx.fillRect(0,0,800,900); 
-            bx.fillStyle="rgba(255,200,100,0.05)"; bx.fillRect(50,50,700,800); 
-            bx.strokeStyle="#3a2a1a"; bx.lineWidth=4; 
-            for(let i=50;i<=750;i+=100){bx.beginPath();bx.moveTo(i,50);bx.lineTo(i,850);bx.stroke();} 
-            for(let j=50;j<=850;j+=100){bx.beginPath();bx.moveTo(50,j);bx.lineTo(750,j);bx.stroke();} 
-        }
-        else if(loc.includes('書閣')){ 
-            let g = bx.createLinearGradient(0,0,0,900); g.addColorStop(0,"#122a2a"); g.addColorStop(1,"#051a1a"); bx.fillStyle=g; bx.fillRect(0,0,800,900); 
-            bx.fillStyle="rgba(200,255,200,0.05)"; bx.fillRect(100,100,600,700); 
-            bx.strokeStyle="#050a0a"; bx.lineWidth=6; 
-            for(let i=100;i<=700;i+=40){bx.beginPath();bx.moveTo(100,i);bx.lineTo(700,i);bx.stroke();} 
-        }
-        else if(loc.includes('膳房')){ 
-            let g = bx.createLinearGradient(0,0,0,900); g.addColorStop(0,"#1a1a1a"); g.addColorStop(1,"#2a1515"); bx.fillStyle=g; bx.fillRect(0,0,800,900); 
-            let gl = bx.createRadialGradient(400,800,50,400,800,600); gl.addColorStop(0,"rgba(255,100,0,0.3)"); gl.addColorStop(1,"rgba(255,100,0,0)"); bx.fillStyle=gl; bx.fillRect(0,0,800,900); 
-            bx.fillStyle="#0a0505"; bx.fillRect(100, 700, 600, 200); 
-        }
-        else if(loc.includes('花園')){ 
-            let g = bx.createLinearGradient(0,0,0,900); g.addColorStop(0,"#080c1a"); g.addColorStop(1,"#1c2841"); bx.fillStyle=g; bx.fillRect(0,0,800,900); 
-            bx.fillStyle="rgba(255,255,230,0.8)"; bx.shadowColor="#ffea00"; bx.shadowBlur=60; bx.beginPath(); bx.arc(700,150,60,0,Math.PI*2); bx.fill(); bx.shadowBlur=0; 
-            bx.fillStyle="#050a14"; bx.beginPath(); bx.moveTo(0,900); bx.lineTo(0,600); bx.quadraticCurveTo(400,400,800,700); bx.lineTo(800,900); bx.fill(); 
-        }
-        else{ 
-            let g = bx.createLinearGradient(0,0,0,900); g.addColorStop(0,"#1f1111"); g.addColorStop(1,"#3f1a1a"); bx.fillStyle=g; bx.fillRect(0,0,800,900); 
-        }
-        bgCanvases[loc] = c; return c;
-    }
-
-    function createCharacterSVG(role, expr) {
-        let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250">
-            <defs>
-                <linearGradient id="skin" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#ffebd6"/><stop offset="100%" stop-color="#e8c2a7"/></linearGradient>
-                <linearGradient id="hair" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#332a2a"/><stop offset="100%" stop-color="#110d0d"/></linearGradient>
-                <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ffeaa7"/><stop offset="100%" stop-color="#d4af37"/></linearGradient>
-            </defs>
-            <circle cx="100" cy="110" r="85" fill="#ffffff" opacity="0.1"/>`;
-
-        if (role === 'maid') {
-            svg += `<path d="M30 250 L60 140 C80 150, 120 150, 140 140 L170 250 Z" fill="#d49a9e" stroke="#8a5358" stroke-width="2"/>
-                    <path d="M70 140 L100 190 L130 140 Z" fill="#f2e1e2"/>
-                    <path d="M80 140 L100 170 L120 140" fill="none" stroke="#b97c83" stroke-width="4"/>`;
-        } else if (role === 'chef') {
-            svg += `<path d="M20 250 L40 140 L160 140 L180 250 Z" fill="#7a6b5d" stroke="#4a3e35" stroke-width="2"/>
-                    <path d="M70 140 L130 140 L130 250 L70 250 Z" fill="#f7f5f0"/>
-                    <path d="M70 140 L100 180 L130 140" fill="none" stroke="#5c4e43" stroke-width="5"/>`;
-        } else if (role === 'doctor') {
-            svg += `<path d="M25 250 L55 140 L145 140 L175 250 Z" fill="#32473b" stroke="#1c2c22" stroke-width="2"/>
-                    <path d="M60 140 L100 200 L140 140" fill="none" stroke="#e8e8e8" stroke-width="6"/>
-                    <path d="M80 140 L100 170 L120 140" fill="none" stroke="#1c2c22" stroke-width="3"/>`;
-        } else if (role === 'medic') {
-            svg += `<path d="M30 250 L60 140 L140 140 L170 250 Z" fill="#6d8a96" stroke="#465c66" stroke-width="2"/>
-                    <path d="M65 140 L100 190 L135 140" fill="none" stroke="#e8f0f2" stroke-width="5"/>
-                    <path d="M80 140 L100 170 L120 140" fill="none" stroke="#465c66" stroke-width="2"/>`;
-        } else if (role.startsWith('player_')) {
-            let c = role.split('_')[2];
-            let cCol = c==='c1'?'#a12a2a':(c==='c2'?'#354f73':'#317d70');
-            let tCol = c==='c1'?'url(#gold)':(c==='c2'?'#e0e1dd':'#f4a261');
-            svg += `<path d="M15 250 L50 140 L150 140 L185 250 Z" fill="${cCol}" stroke="#111" stroke-width="2"/>
-                    <path d="M60 140 L100 210 L140 140" fill="none" stroke="${tCol}" stroke-width="8"/>
-                    <path d="M75 140 L100 180 L125 140" fill="none" stroke="#222" stroke-width="2"/>`;
-        } else if (role === 'baby') {
-            return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250">
-                <path d="M20 170 Q100 250 180 170 L160 120 L40 120 Z" fill="#b08a68" stroke="#5c4530" stroke-width="5"/>
-                <path d="M45 150 C45 80, 155 80, 155 150 Z" fill="#d95555" stroke="#882222" stroke-width="3"/>
-                <circle cx="100" cy="115" r="28" fill="url(#skin)"/>
-                <path d="M85 115 Q92 118 96 115 M104 115 Q108 118 115 115" fill="none" stroke="#333" stroke-width="2.5" stroke-linecap="round"/>
-                <circle cx="100" cy="128" r="5" fill="#ff9999"/>
-                <path d="M70 105 C70 70, 130 70, 130 105 Z" fill="url(#gold)"/>
-                <circle cx="85" cy="80" r="10" fill="#d95555"/><circle cx="115" cy="80" r="10" fill="#d95555"/>
-                <path d="M90 90 L110 90 M100 90 L100 80" stroke="#333" stroke-width="2" stroke-linecap="round"/>
-                <circle cx="75" cy="120" r="6" fill="#ffb3b3" opacity="0.6"/><circle cx="125" cy="120" r="6" fill="#ffb3b3" opacity="0.6"/>
-            </svg>`;
-        }
-
-        svg += `<rect x="85" y="125" width="30" height="25" fill="url(#skin)"/>`;
-
-        let fw = role === 'chef' ? 48 : (role.includes('f2') ? 42 : (role.includes('f3') ? 46 : 38));
-        let fh = role === 'chef' ? 52 : (role.includes('f2') ? 50 : (role.includes('f3') ? 46 : 54));
-        svg += `<ellipse cx="100" cy="95" rx="${fw}" ry="${fh}" fill="url(#skin)" stroke="#c29a82" stroke-width="1.5"/>`;
-
-        let ey=88, my=120;
-        if(expr==='angry') svg+=`<ellipse cx="100" cy="${ey-5}" rx="${fw-5}" ry="20" fill="#332222" opacity="0.3"/>`;
-        if(expr==='shocked') svg+=`<path d="M${100-fw+5} 60 Q100 90 ${100+fw-5} 60 Z" fill="#6699cc" opacity="0.5"/>`;
-
-        if(expr==='happy'){
-            svg+=`<path d="M 68 ${ey+2} Q 80 ${ey-6} 90 ${ey+2} M 110 ${ey+2} Q 120 ${ey-6} 132 ${ey+2}" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round"/>`;
-            svg+=`<path d="M 90 ${my-2} Q 100 ${my+12} 110 ${my-2} Z" fill="#d68383"/>`;
-            svg+=`<ellipse cx="70" cy="${ey+12}" rx="10" ry="5" fill="#ff7777" opacity="0.8"/><ellipse cx="130" cy="${ey+12}" rx="10" ry="5" fill="#ff7777" opacity="0.8"/>`;
-            svg+=`<path d="M 30 70 L 40 55 L 50 70 Z M 160 50 L 170 35 L 180 50 Z" fill="url(#gold)"/>`; 
-        }else if(expr==='shocked'){
-            svg+=`<circle cx="78" cy="${ey}" r="6" fill="#fff" stroke="#222" stroke-width="1.5"/><circle cx="78" cy="${ey}" r="1.5" fill="#111"/>`;
-            svg+=`<circle cx="122" cy="${ey}" r="6" fill="#fff" stroke="#222" stroke-width="1.5"/><circle cx="122" cy="${ey}" r="1.5" fill="#111"/>`;
-            svg+=`<circle cx="100" cy="${my+8}" r="6" fill="#444"/>`;
-            svg+=`<path d="M 145 70 Q 155 85 145 90 Q 135 85 145 70 Z" fill="#99ccff" opacity="0.9"/>`; 
-            svg+=`<path d="M 70 ${ey-12} Q 80 ${ey-18} 90 ${ey-15} M 130 ${ey-12} Q 120 ${ey-18} 110 ${ey-15}" fill="none" stroke="#222" stroke-width="2.5" stroke-linecap="round"/>`;
-        }else if(expr==='angry'){
-            svg+=`<path d="M 65 ${ey-4} L 88 ${ey+3} M 135 ${ey-4} L 112 ${ey+3}" stroke="#222" stroke-width="3.5" stroke-linecap="round"/>`;
-            svg+=`<circle cx="80" cy="${ey+5}" r="2.5" fill="#111"/><circle cx="120" cy="${ey+5}" r="2.5" fill="#111"/>`;
-            svg+=`<path d="M 88 ${my+6} Q 100 ${my-2} 112 ${my+6}" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round"/>`;
-            svg+=`<path d="M 135 45 L 155 55 M 155 45 L 135 55 M 135 50 L 155 50 M 145 45 L 145 55" stroke="#ff3333" stroke-width="2.5"/>`; 
-        }else{
-            svg+=`<path d="M 68 ${ey-4} Q 80 ${ey-8} 90 ${ey-4} M 110 ${ey-4} Q 120 ${ey-8} 132 ${ey-4}" fill="none" stroke="#222" stroke-width="2" stroke-linecap="round"/>`;
-            svg+=`<circle cx="80" cy="${ey}" r="4" fill="#222"/><circle cx="120" cy="${ey}" r="4" fill="#222"/>`;
-            svg+=`<path d="M 90 ${my} Q 100 ${my+5} 110 ${my}" fill="none" stroke="#c29a82" stroke-width="2.5" stroke-linecap="round"/>`;
-        }
-
-        if(role.startsWith('player_')){ 
-            let f=role.split('_')[1]; 
-            svg+=`<path d="M 35 90 C 20 220, 180 220, 165 90 Z" fill="url(#hair)"/>`; 
-            if(f==='f1') { svg+=`<path d="M 50 65 C 40 0, 160 0, 150 65 Z" fill="url(#hair)"/><ellipse cx="100" cy="20" rx="40" ry="30" fill="url(#hair)"/><path d="M 80 20 L 40 -10 M 120 20 L 160 -10" stroke="url(#gold)" stroke-width="4"/><circle cx="40" cy="-10" r="7" fill="#ff4444"/><circle cx="160" cy="-10" r="7" fill="#4444ff"/>`; } 
-            else if(f==='f2') { svg+=`<path d="M 40 65 C 20 -10, 180 -10, 160 65 Z" fill="url(#hair)"/><ellipse cx="100" cy="15" rx="60" ry="35" fill="url(#hair)"/><path d="M 100 15 L 100 -15" stroke="url(#gold)" stroke-width="5"/><circle cx="100" cy="-15" r="10" fill="#44cc44"/><path d="M 80 15 L 60 5 M 120 15 L 140 5" stroke="url(#gold)" stroke-width="3"/>`; } 
-            else { svg+=`<path d="M 45 65 C 40 10, 160 10, 155 65 Z" fill="url(#hair)"/><circle cx="55" cy="25" r="30" fill="url(#hair)"/><circle cx="145" cy="25" r="30" fill="url(#hair)"/><circle cx="55" cy="25" r="12" fill="#ff9999"/><circle cx="145" cy="25" r="12" fill="#ff9999"/>`; }
-        } 
-        else if(role==='maid') {
-            svg+=`<path d="M 45 65 C 40 10, 160 10, 155 65 Z" fill="url(#hair)"/><circle cx="50" cy="35" r="25" fill="url(#hair)"/><circle cx="150" cy="35" r="25" fill="url(#hair)"/><path d="M 50 35 L 30 80 M 150 35 L 170 80" stroke="#ff6666" stroke-width="6" stroke-linecap="round"/>`;
-        } 
-        else if(role==='chef') {
-            svg+=`<path d="M 45 80 Q 100 20 155 80 L 140 120 Q 100 70 60 120 Z" fill="#665c54"/><path d="M 60 40 C 60 -10, 140 -10, 140 40 Z" fill="#e8e8e8" stroke="#ccc" stroke-width="2"/><path d="M 70 135 Q 100 180 130 135 Z" fill="#4a423b"/>`; 
-        } 
-        else if(role==='doctor') {
-            svg+=`<path d="M 50 45 L 150 45 L 140 0 L 60 0 Z" fill="#111"/><path d="M 10 40 L 190 40 L 190 50 L 10 50 Z" fill="#000"/><path d="M 80 135 Q 100 200 120 135 Z" fill="#eeeeee"/>`; 
-        } 
-        else if(role==='medic') {
-            svg+=`<path d="M 40 65 C 40 0, 160 0, 160 65 Z" fill="url(#hair)"/><path d="M 55 15 L 145 15 L 135 55 L 65 55 Z" fill="#8caeb8"/><circle cx="100" cy="35" r="8" fill="url(#gold)"/>`; 
-        }
-        
-        return svg+`</svg>`;
-    }
-
-    const LImgs = {};
-    ['maid','chef','doctor','medic','baby',...FList.flatMap(f=>CList.map(c=>`player_${f}_${c}`))]
-    .forEach(r => { 
-        LImgs[r] = {}; 
-        if(r==='baby') { 
-            let i=new Image(); i.src=URL.createObjectURL(new Blob([createCharacterSVG('baby', 'normal')],{type:'image/svg+xml'})); LImgs[r]['normal']=i; 
-        } else { 
-            ['normal','happy','shocked','angry'].forEach(e => { 
-                let i=new Image(); i.src=URL.createObjectURL(new Blob([createCharacterSVG(r,e)],{type:'image/svg+xml'})); LImgs[r][e]=i; 
-            }); 
-        } 
-    });
 
     // ==========================================
-    // 衛教題庫與劇情
+    // 專屬身世支線與共用衛教題庫
     // ==========================================
-    const introStage = {type: "quiz", img: "medic", char: "醫女 蘇氏", q: "【起始抉擇】望著孩兒，您在心中暗暗定下規矩：",
-        s: [
-            "【大宋汴京 · 侯府內宅】\n我是這座侯府的主母。昨日歷經千辛萬苦，終於平安誕下了小少爺。", 
-            "「初為人母，事事皆新。我定要好好學習調養與育兒技巧，照顧好少爺，也保重自己的鳳體。」", 
-            "蘇醫女輕聲說：「夫人，現在為您進行產後『早期肌膚接觸』。這能讓寶寶身心穩定，刺激荷爾蒙分泌，是啟動哺育的黃金關鍵。」\n\n【衛教小知識】：母乳含有豐富的天然抗體與生長因子，能為寶寶建立強大的腸道免疫系統。"
+    const originStages = {
+        '名門嫡女': {
+            type: "interaction", imageId: "doctor", character: "太醫 張大人",
+            story: [
+                { imageId: "player", character: "{playerName}", text: "老夫人派人送來了極其珍貴的『千年人參湯』，指名要給我補身子。" },
+                { imageId: "doctor", character: "太醫 張大人", text: "「夫人！這千年人參雖是大補，但對產婦而言，卻是退奶的大忌啊！」\n【調養小記】：人參、韭菜、麥芽水等都是常見的退奶食物，哺乳期應避開。" }
+            ],
+            question: "【嫡女專屬支線】面對老夫人的賞賜與太醫的勸告，您該如何應對？",
+            options: [
+                { text: "婉拒並請太醫作證人參會退奶，改請老夫人賜黑豆豬腳湯。", feedback: "【太醫 撫鬚】夫人睿智！既保全了老夫人的顏面，又守住了小少爺的糧倉。", affects: [{char: 'doctor', val: 30, status: '欣慰'}], healthVal: 30, expr: 'happy' },
+                { text: "為了面子硬著頭皮喝下去，反正千年人參難得一見。", feedback: "【太醫 擔憂】這...夫人，您喝了之後當晚奶水疏少，小少爺吸吮得較為費力，下次可得留心了。", affects: [{char: 'doctor', val: -25, status: '擔憂'}], healthVal: -25, expr: 'shocked' },
+                { text: "有些不知所措，不知道該聽誰的，內心感到焦慮。", feedback: "【太醫 溫言勸阻】夫人莫慌，產後心思細密、容易糾結是常見的。這參湯咱們婉言推辭即可，有微臣與醫女在，定能替您妥善調養。", affects: [{char: 'doctor', val: -15, status: '擔憂'}], healthVal: -15, expr: 'shocked' }
+            ]
+        },
+        '書香世家': {
+            type: "interaction", imageId: "medic", character: "醫女 蘇氏",
+            story: [
+                { imageId: "player", character: "{playerName}", text: "夫君翻閱古籍，找來了一帖『通草麥芽飲』，說是書上記載能助產婦通暢氣血。" },
+                { imageId: "medic", character: "醫女 蘇氏", text: "「夫人，這通草雖通乳，但『麥芽』卻是實打實的退奶藥啊！」\n【調養小記】：大麥芽常被用來退奶，若要發奶，應多攝取水分與優質蛋白質如魚湯。" }
+            ],
+            question: "【書香專屬支線】面對夫君引經據典的偏方，您該如何抉擇？",
+            options: [
+                { text: "微笑指出古籍中麥芽實為『退奶』之用，請夫君改查『魚湯發奶』之法。", feedback: "【蘇醫女 欣慰】夫人學識淵博！夫君聽後也恍然大悟，立刻命人去廚房熬煮鮮魚湯了。", affects: [{char: 'medic', val: 30, status: '崇敬'}], healthVal: 30, expr: 'happy' },
+                { text: "盲目相信古籍與夫君，喝了之後發現乳房乾癟。", feedback: "【蘇醫女 擔憂】哎...古籍也有未臻完善之處。您喝了之後奶水大減，先別急，多喝溫水與親餵還來得及補救。", affects: [{char: 'medic', val: -25, status: '擔憂'}], healthVal: -25, expr: 'shocked' },
+                { text: "內心焦躁，覺得身邊的人都給錯建議，不知如何是好。", feedback: "【蘇醫女 柔聲安撫】夫人息怒，夫君也是愛子心切。產後情緒起伏在所難免，咱們不喝這飲子便是，喝杯熱水寬寬心。", affects: [{char: 'medic', val: -15, status: '關切'}], healthVal: -15, expr: 'shocked' }
+            ]
+        },
+        '富商巨賈': {
+            type: "interaction", imageId: "chef", character: "膳房 總管",
+            story: [
+                { imageId: "player", character: "{playerName}", text: "娘家送來了重金聘請的三位『西域奶娘』，勸我別親自餵奶了，以免壞了身段。" },
+                { imageId: "chef", character: "膳房 總管", text: "「夫人，這幾位奶娘各個豐乳肥臀，娘家老爺說了，您只要專心吃燕窩享福就好！」\n【調養小記】：母乳含有無法取代的抗體與生長因子。且若不親餵，產婦自身也易漲奶發炎。" }
+            ],
+            question: "【富商專屬支線】面對娘家的安排，您該如何抉擇？",
+            options: [
+                { text: "留下奶娘幫忙拍嗝洗澡，但堅持『親自哺餵』給寶寶最好的抗體。", feedback: "【總管 敬佩】夫人真是慈母！既享受了人手伺候，又親自給了小少爺最珍貴的母乳抗體！", affects: [{char: 'chef', val: 30, status: '死心塌地'}, {char: 'medic', val: 20, status: '崇敬'}], healthVal: 30, expr: 'happy' },
+                { text: "覺得有理，立刻將寶寶丟給奶娘，自己整天躺著吃燕窩。", feedback: "【總管 擔憂】夫人...您雖然輕鬆了，但您自己沒讓少爺吸吮，如今雙乳脹痛得像石頭一樣，得趕緊請醫女熱敷舒緩了。", affects: [{char: 'chef', val: -25, status: '擔憂'}], healthVal: -25, expr: 'shocked' },
+                { text: "感到極度煩躁，覺得下人們都在逼迫您，不想面對任何人。", feedback: "【總管 趕忙打圓場】夫人莫惱！老爺也是心疼您辛苦。既然您不喜歡，奴才這就遣退她們，您安心好好睡一覺。", affects: [{char: 'chef', val: -15, status: '惶恐'}], healthVal: -15, expr: 'shocked' }
+            ]
+        }
+    };
+
+    const introStage = {   
+        type: "quiz", imageId: "medic", character: "醫女 蘇氏",
+        story: [
+            { imageId: "player", character: "{playerName}", text: "【大宋汴京 · {residence}】\n我是這座府邸的主母。昨日歷經千辛萬苦，終於平安誕下了府裡的嫡出小少爺。" },
+            { imageId: "player", character: "{playerName}", text: "「初為人母，事事皆新。我定要好好學習調養與育兒技巧，照顧好少爺，也保重自己的鳳體。」" },
+            { imageId: "medic", character: "醫女 蘇氏", text: "「夫人，現在為您進行產後『早期肌膚接觸』。這能讓寶寶身心穩定，刺激荷爾蒙分泌，是啟動哺育的黃金關鍵。」\n【調養小記】：母乳含有豐富的天然抗體與生長因子，能為寶寶建立強大的腸道免疫系統。" }
         ],
-        opts: [
-            {t: "定要學習現代科學親餵法，與身邊的下人們攜手配合。", fb: "【蘇醫女 欣慰】夫人做得極好！沒有衣服阻隔的皮膚貼皮膚，能讓寶寶感受您的心跳，激發尋乳本能！", af: [{c: 'medic', v: 25, s: '崇敬'}], h: 25, ex: 'happy'},
-            {t: "怕寶寶著涼，用厚厚的蠶絲包巾把他包得緊緊的再抱著。", fb: "【蘇醫女 溫柔提醒】夫人，包得太厚就無法達到『肌膚接觸』的效果了。這會阻礙寶寶依靠觸覺尋找乳房的本能喔。", af: [{c: 'medic', v: -15, s: '擔憂'}], h: -15, ex: 'shocked'},
-            {t: "身心實在太累了，決定先推去嬰兒室，暫時交給其他人照顧。", fb: "【蘇醫女 輕聲勸解】夫人辛苦了，產後疲憊是正常的。若能撐過這段黃金接觸期，之後的泌乳與親餵會更加順暢，咱們慢慢來。", af: [{c: 'medic', v: -25, s: '關切'}], h: -20, ex: 'shocked'}
+        question: "【起始抉擇】望著懷中柔嫩的孩兒，您決定如何開啟這趟旅程？",
+        options: [
+            { text: "定要學習現代科學親餵法，與身邊的下人們攜手配合。", feedback: "【蘇醫女 欣慰】夫人做得極好！沒有衣服阻隔的皮膚貼皮膚，能讓寶寶感受您的心跳，激發尋乳本能！", affects: [{char: 'medic', val: 25, status: '崇敬'}], healthVal: 25, expr: 'happy' },
+            { text: "怕寶寶著涼，用厚厚的蠶絲包巾把他包得緊緊的再抱著。", feedback: "【蘇醫女 溫柔提醒】夫人，包得太厚就無法達到『肌膚接觸』的效果了。這會阻礙寶寶依靠觸覺尋找乳房的本能喔。", affects: [{char: 'medic', val: -15, status: '擔憂'}], healthVal: -15, expr: 'shocked' },
+            { text: "身心實在太累了，決定先推去嬰兒室，暫時交給其他人照顧。", feedback: "【蘇醫女 輕聲勸解】夫人辛苦了，產後疲憊是正常的。若能撐過這段黃金接觸期，之後的泌乳與親餵會更加順暢，咱們慢慢來。", affects: [{char: 'medic', val: -25, status: '關切'}], healthVal: -20, expr: 'shocked' }
         ]
     };
-        
-    const originStages = {
-        '名門嫡女': {type: "quiz", img: "doctor", char: "太醫 張大人", q: "【嫡女專屬支線】面對老夫人的賞賜與太醫的勸告，您該如何應對？",
-            s: ["老夫人派人送來了極其珍貴的『千年人參湯』，指名要給我補身子。","太醫張大人：「夫人！這千年人參雖是大補，但對產婦而言，卻是退奶的大忌啊！」\n\n【衛教小知識】：人參、韭菜、麥芽水等都是常見的退奶食物，哺乳期應避開。"],
-            opts: [
-                {t: "婉拒並請太醫作證人參會退奶，改請老夫人賜黑豆豬腳湯。", fb: "【太醫 撫鬚】夫人睿智！既保全了老夫人的顏面，又守住了小少爺的糧倉。", af: [{c: 'doctor', v: 30, s: '欣慰'}], h: 30, ex: 'happy'},
-                {t: "為了面子硬著頭皮喝下去，反正千年人參難得一見。", fb: "【太醫 擔憂】這...夫人，您喝了之後當晚奶水疏少，小少爺吸吮得較為費力，下次可得留心了。", af: [{c: 'doctor', v: -25, s: '擔憂'}], h: -25, ex: 'shocked'},
-                {t: "有些不知所措，不知道該聽誰的，內心感到焦慮。", fb: "【太醫 溫言勸阻】夫人莫慌，這參湯咱們婉言推辭即可，有微臣與醫女在，定能替您妥善調養。", af: [{c: 'doctor', v: -15, s: '擔憂'}], h: -15, ex: 'shocked'}
-            ]},
-        '書香世家': {type: "quiz", img: "medic", char: "醫女 蘇氏", q: "【書香專屬支線】面對夫君引經據典的偏方，您該如何抉擇？",
-            s: ["夫君翻閱古籍，找來了一帖『通草麥芽飲』，說是書上記載能助產婦通暢氣血。","蘇醫女：「夫人，這通草雖通乳，但『麥芽』卻是實打實的退奶藥啊！」\n\n【衛教小知識】：大麥芽常被用來退奶，若要發奶，應多攝取水分與優質蛋白質如魚湯。"],
-            opts: [
-                {t: "微笑指出古籍中麥芽實為『退奶』之用，請夫君改查『魚湯發奶』之法。", fb: "【蘇醫女 欣慰】夫人學識淵博！夫君聽後也恍然大悟，立刻命人去廚房熬煮鮮魚湯了。", af: [{c: 'medic', v: 30, s: '崇敬'}], h: 30, ex: 'happy'},
-                {t: "盲目相信古籍與夫君，喝了之後發現乳房乾癟。", fb: "【蘇醫女 擔憂】哎...古籍也有未臻完善之處。您喝了之後奶水大減，先別急，多喝溫水與親餵還來得及補救。", af: [{c: 'medic', v: -25, s: '擔憂'}], h: -25, ex: 'shocked'},
-                {t: "內心焦躁，覺得身邊的人都給錯建議，不知如何是好。", fb: "【蘇醫女 柔聲安撫】夫人息怒，夫君也是愛子心切。咱們不喝這飲子便是，喝杯熱水寬寬心。", af: [{c: 'medic', v: -15, s: '關切'}], h: -15, ex: 'shocked'}
-            ]},
-        '富商巨賈': {type: "quiz", img: "chef", char: "膳房 總管", q: "【富商專屬支線】面對娘家的安排，您該如何抉擇？",
-            s: ["娘家送來了重金聘請的三位『西域奶娘』，勸我別親自餵奶了，以免壞了身段。","膳房總管：「夫人，娘家老爺說了，您只要專心吃燕窩享福就好！」\n\n【衛教小知識】：母乳含有無法取代的抗體。且若不親餵，產婦自身也易漲奶發炎。"],
-            opts: [
-                {t: "留下奶娘幫忙洗澡，但堅持『親自哺餵』給寶寶最好的抗體。", fb: "【總管 敬佩】夫人真是慈母！既享受了人手伺候，又親自給了小少爺最珍貴的母乳抗體！", af: [{c: 'chef', v: 30, s: '死心塌地'},{c: 'medic', v: 20, s: '崇敬'}], h: 30, ex: 'happy'},
-                {t: "覺得有理，立刻將寶寶丟給奶娘，自己整天躺著吃燕窩。", fb: "【總管 擔憂】夫人...您自己沒讓少爺吸吮，如今雙乳脹痛得像石頭一樣，得趕緊請醫女熱敷舒緩了。", af: [{c: 'chef', v: -25, s: '惶恐'}], h: -25, ex: 'shocked'},
-                {t: "感到極度煩躁，不想面對任何人。", fb: "【總管 趕忙打圓場】夫人莫惱！老爺也是心疼您辛苦。既然您不喜歡，奴才這就遣退她們，您安心好好睡一覺。", af: [{c: 'chef', v: -15, s: '惶恐'}], h: -15, ex: 'shocked'}
-            ]}
-    };
-    
-    let QPool = {
+
+    const allQuestionPools = {
         'maid': [
-            {img:"maid", char:"丫鬟 春桃", q:"【初乳迷思】面對春桃的疑慮，夫人該如何回應？", s:["春桃：「夫人...這初乳又黃又濃，而且量這麼少，這怎麼夠小少爺塞牙縫呀？」\n\n【衛教小知識】：初乳量雖少，但富含抗體。新生兒胃第一天僅有彈珠大小，少量初乳絕對足夠。"],
-             opts:[{t:"初乳是抗體精華，新生兒胃只有彈珠大，這點量足夠了。", fb:"【春桃 恍然大悟】原來如此！這金黃色的初乳竟是給小少爺最好的保護，奴婢受教了！", af:[{c:'maid',v:25,s:'崇拜'}], h:25, ex:'happy'},
-                   {t:"妳說得對，奶水確實太少了，快去熬點濃米湯來給少爺墊墊肚子。", fb:"【春桃 慌張】可是...蘇醫女說新生兒腸胃弱不能喝米湯，夫人，這法子好像不太安全呢。", af:[{c:'maid',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
-                   {t:"聽得心煩意亂，有些自責是不是自己身體不好。", fb:"【春桃 趕忙安慰】夫人快別這麼說！您千萬別焦慮，奴婢這就去請教蘇醫女，您好好放鬆身心。", af:[{c:'maid',v:-10,s:'關切'}], h:-10, ex:'shocked'}]},
-            {img:"maid", char:"丫鬟 春桃", q:"【飽足判斷】判斷寶寶有沒有吃飽，最客觀科學的指標是？", s:["春桃：「夫人，母奶看起來好稀，小主子喝母乳是不是很容易餓，真的有吃飽嗎？」\n\n【衛教小知識】：判斷吃飽最客觀的指標是尿布量。出生第四天後，一天若有6片以上沉甸甸的濕尿布即代表進食充足。"],
-             opts:[{t:"觀察尿布。一天有 6 片以上沉甸甸濕尿布便是有吃飽了。", fb:"【春桃 恍然大悟】原來如此！看尿量最準確，奴婢這就去拿小本子記尿布！", af:[{c:'maid',v:25,s:'崇拜'}], h:25, ex:'happy'},
-                   {t:"只要他一哭就是沒吃飽，立刻給他補大碗配方奶！", fb:"【春桃 擔憂】夫人...小少爺哭有時只是想要討抱，過度補奶反而會讓您的母乳分泌變少喔。", af:[{c:'maid',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
-                   {t:"感到很沮喪，開始懷疑自己的奶水沒有營養。", fb:"【春桃 輕聲安慰】夫人千萬別灰心！蘇醫女說親餵的量絕對足夠，我們看尿布和體重最準，您別給自己太大壓力。", af:[{c:'maid',v:-10,s:'關切'}], h:-10, ex:'shocked'}]}
+            { type: "quiz", imageId: "maid", character: "丫鬟 春桃",
+              story: [{ imageId: "maid", character: "丫鬟 春桃", text: "「夫人...初乳又黃又濃，量這麼少，這怎麼夠小少爺塞牙縫呀？」\n【調養小記】：初乳量雖少，但富含抗體與生長因子。新生兒胃僅有彈珠大小（5-7ml），初乳絕對足夠。" }],
+              question: "【初乳迷思】面對春桃的疑慮，夫人該如何回應？",
+              options: [
+                  { text: "初乳是抗體精華，新生兒胃只有彈珠大，這點量足夠了。", feedback: "【春桃 恍然大悟】原來如此！這金黃色的初乳竟是給小少爺最好的保護，奴婢受教了！", affects: [{char: 'maid', val: 25, status: '崇拜'}], healthVal: 25, expr: 'happy' },
+                  { text: "妳說得對，奶水確實太少了，快去熬點濃米湯來給少爺墊墊肚子。", feedback: "【春桃 慌張】可是...蘇醫女說新生兒腸胃弱不能喝米湯，夫人，這法子好像不太安全呢。", affects: [{char: 'maid', val: -15, status: '擔憂'}], healthVal: -15, expr: 'shocked' },
+                  { text: "聽得心煩意亂，不知如何是好，有些自責是不是自己身體不好。", feedback: "【春桃 趕忙安慰】夫人快別這麼說！您千萬別焦慮，奴婢這就去請教蘇醫女，您好好放鬆身心。", affects: [{char: 'maid', val: -10, status: '關切'}], healthVal: -10, expr: 'shocked' }
+            ]},
+            { type: "quiz", imageId: "maid", character: "丫鬟 春桃",
+              story: [{ imageId: "maid", character: "丫鬟 春桃", text: "「夫人，母奶看起來好稀，小主子真的有吃飽嗎？」\n【調養小記】：判斷吃飽最客觀的指標是尿布量。出生第四天後，一天若有6片以上沉甸甸的濕尿布即代表進食充足。" }],
+              question: "【飽足判斷】判斷寶寶有沒有吃飽，最客觀科學的指標是？",
+              options: [
+                  { text: "觀察尿布。一天有 6 片以上沉甸甸濕尿布便是有吃飽了。", feedback: "【春桃 恍然大悟】原來如此！看尿量最準確，奴婢這就去拿小本子記尿布！", affects: [{char: 'maid', val: 25, status: '崇拜'}], healthVal: 25, expr: 'happy' },
+                  { text: "只要他一哭就是沒吃飽，立刻給他補大碗配方奶！", feedback: "【春桃 擔憂】夫人...小少爺哭有時只是想要討抱，過度補奶反而會讓您的母乳分泌變少喔。", affects: [{char: 'maid', val: -15, status: '擔憂'}], healthVal: -15, expr: 'shocked' },
+                  { text: "感到很沮喪，開始懷疑自己的奶水沒有營養。", feedback: "【春桃 輕聲安慰】夫人千萬別灰心！蘇醫女說親餵的量絕對足夠，我們看尿布和體重最準，您別給自己太大壓力。", affects: [{char: 'maid', val: -10, status: '關切'}], healthVal: -10, expr: 'shocked' }
+            ]},
+            { type: "quiz", imageId: "maid", character: "丫鬟 春桃",
+              story: [{ imageId: "maid", character: "丫鬟 春桃", text: "「夫人，小主子這幾天的大便都是墨綠色的黏便，是不是身體不適？」\n【調養小記】：出生頭兩三天排出墨綠色胎便是正常的。只要持續勤快餵母乳即可幫助排出。" }],
+              question: "【胎便觀察】面對剛出生兩天寶寶的墨綠色大便，夫人該如何判斷？",
+              options: [
+                  { text: "這是正常的胎便現象，只要持續按需求餵母乳即可。", feedback: "【春桃 鬆口氣】原來這是正常的胎便，夫人真是見多識廣，奴婢這就放心了！", affects: [{char: 'maid', val: 25, status: '崇拜'}], healthVal: 25, expr: 'happy' },
+                  { text: "顏色看起來真嚇人，肯定是小少爺病了，快去抓退火的草藥來偏方治療。", feedback: "【春桃 嚇傻】夫人別急！初生嬰兒可不能亂吃草藥，咱們還是先問問張太醫吧。", affects: [{char: 'maid', val: -20, status: '擔憂'}], healthVal: -15, expr: 'shocked' },
+                  { text: "感到極度焦慮，手足無措地跟著春桃一起對著尿布發愁。", feedback: "【春桃 寬慰】夫人別慌，產後心思細膩難免容易緊張，奴婢瞧著小少爺精神挺好的，咱們請醫女來瞧瞧便是。", affects: [{char: 'maid', val: -10, status: '關切'}], healthVal: -10, expr: 'shocked' }
+            ]},
+            { type: "quiz", imageId: "maid", character: "丫鬟 春桃",
+              story: [{ imageId: "maid", character: "丫鬟 春桃", text: "「夫人，您昨日才剛生完，怎麼小主子的體重好像變輕了一點？」\n【調養小記】：新生兒頭幾天會有「生理性體重下降」（約減少出生體重的7%內），在 10-14 天後就會恢復出生體重。" }],
+              question: "【體重下降】對於寶寶初期的體重減輕，夫人該如何看待？",
+              options: [
+                  { text: "這是正常的生理脫水，只要排泄正常，持續親餵即可。", feedback: "【春桃 拍胸脯】原來是正常的生理性脫水，嚇死奴婢了！", affects: [{char: 'maid', val: 20, status: '崇拜'}], healthVal: 20, expr: 'happy' },
+                  { text: "一定是我奶水沒營養，立刻叫人去買最貴配方奶補體重！", feedback: "【春桃 擔憂】夫人別急，蘇醫女說這是正常的，過度干預反而不好。", affects: [{char: 'maid', val: -20, status: '慌張'}], healthVal: -20, expr: 'shocked' },
+                  { text: "這孩子養不活了！把他扔到柴房去自生自滅！", feedback: "【春桃 尖叫】夫人您瘋了嗎！這可是您十月懷胎的親骨肉啊！", affects: [{char: 'maid', val: -50, status: '瑟瑟發抖'}], healthVal: -40, expr: 'angry' }
+            ]}
         ],
         'chef': [
-            {img:"chef", char:"膳房 總管", q:"【發奶飲食】為了順暢發奶且不塞奶，夫人該如何選擇？", s:["總管：「夫人！這十全大補麻油豬腳湯上面浮著厚油，最是滋補發奶！」\n\n【衛教小知識】：產後發奶應多攝取水分與清淡蛋白質。過於油膩的濃湯易導致乳汁脂肪過高，反易造成乳腺阻塞。"],
-             opts:[{t:"請廚房撇去浮油，平日多喝清淡的魚湯與水分，攝取優質蛋白質。", fb:"【總管 敬佩】清淡的高蛋白湯水好吸收又發奶，夫人真是深諳養生之道！", af:[{c:'chef',v:25,s:'死心塌地'}], h:25, ex:'happy'},
-                   {t:"為了多產點奶，硬著頭皮把這整鍋油膩膩的濃湯連油帶肉喝光。", fb:"【總管 擔憂】這...夫人，太過油膩容易讓乳汁脂肪過高，反倒容易塞奶變成石頭奶，這可辛苦您了。", af:[{c:'chef',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
-                   {t:"覺得胃口全無，什麼進補的湯水都不想喝，打算空腹一整天。", fb:"【總管 慌忙規勸】夫人不愛吃油膩的奴才明白，但產後身子虛可不能不吃東西，奴才這就去熬一碗清淡的鮮魚湯來。", af:[{c:'chef',v:-10,s:'惶恐'}], h:-10, ex:'shocked'}]},
-            {img:"chef", char:"膳房 總管", q:"【退奶地雷】看到這份點心，身為親餵媽媽的您該如何指示？", s:["總管：「夫人，這是奴才特別為您準備的『韭菜炒雞蛋』配『人參溫補茶』！」\n\n【衛教小知識】：哺乳期應避開退奶三大地雷食物：人參、韭菜、大麥芽水。"],
-             opts:[{t:"婉拒這兩樣食材，告知人參和韭菜容易退奶，請總管換成溫熱黑豆水。", fb:"【總管 驚出一身冷汗】哎呀！竟不知這兩樣是退奶大忌！多虧夫人博學，奴才這就去換黑豆水！", af:[{c:'chef',v:25,s:'敬佩'}], h:25, ex:'happy'},
-                   {t:"不疑有他，這都是高級食材，全部吃光光補身體。", fb:"【總管 困惑】奇怪...夫人吃完後，怎麼晚上的奶水量明顯變少了？小少爺看來沒吃飽呢。", af:[{c:'chef',v:-20,s:'擔憂'}], h:-20, ex:'shocked'},
-                   {t:"感到極度無奈與疲憊，不知道該怎麼跟膳房溝通，內心十分沮喪。", fb:"【總管 柔聲寬慰】夫人莫要憂心，產後身心勞累奴才都明白。您先歇著，奴才去請教蘇醫女正確的月子膳食，一定讓您吃得舒心。", af:[{c:'chef',v:-10,s:'惶恐'}], h:-10, ex:'shocked'}]}
+            { type: "interaction", imageId: "chef", character: "膳房 總管",
+              story: [{ imageId: "chef", character: "膳房 總管", text: "「夫人！這十全大補麻油豬腳湯上面浮著厚油，最是滋補發奶！」\n【調養小記】：產後發奶應多攝取水分與清淡蛋白質。過於油膩的濃湯容易導致乳汁脂肪過高，反易造成乳腺阻塞。" }],
+              question: "【發奶飲食】為了順暢發奶且不塞奶，夫人該如何選擇？",
+              options: [
+                  { text: "請廚房撇去浮油，平日多喝清淡的魚湯與水分，攝取優質蛋白質。", feedback: "【總管 敬佩】清淡的高蛋白湯水好吸收又發奶，夫人真是深諳養生之道！", affects: [{char: 'chef', val: 25, status: '死心塌地'}], healthVal: 25, expr: 'happy' },
+                  { text: "為了多產點奶，硬著頭皮把這整鍋油膩膩的濃湯連油帶肉喝光。", feedback: "【總管 擔憂】這...夫人，太過油膩容易讓乳汁脂肪過高，反倒容易塞奶變成石頭奶，這可辛苦您了。", affects: [{char: 'chef', val: -15, status: '擔憂'}], healthVal: -15, expr: 'shocked' },
+                  { text: "覺得胃口全無，什麼進補的湯水都不想喝，打算空腹一整天。", feedback: "【總管 慌忙規勸】夫人不愛吃油膩的奴才明白，但產後身子虛可不能不吃東西，奴才這就去熬一碗清淡的小米粥與鮮魚湯來。", affects: [{char: 'chef', val: -10, status: '惶恐'}], healthVal: -10, expr: 'shocked' }
+            ]},
+            { type: "interaction", imageId: "chef", character: "膳房 總管",
+              story: [{ imageId: "chef", character: "膳房 總管", text: "「夫人，這是奴才特別為您準備的『韭菜炒雞蛋』配『人參溫補茶』！」\n【調養小記】：哺乳期應避開退奶三大地雷食物：人參、韭菜、大麥芽水。" }],
+              question: "【退奶地雷】看到這份點心，身為親餵媽媽的您該如何指示？",
+              options: [
+                  { text: "婉拒這兩樣食材，告知人參和韭菜容易退奶，請總管換成溫熱黑豆水。", feedback: "【總管 驚出一身冷汗】哎呀！奴才該死，竟不知這兩樣是退奶大忌！多虧夫人博學，奴才這就去換黑豆水！", affects: [{char: 'chef', val: 25, status: '敬佩'}], healthVal: 25, expr: 'happy' },
+                  { text: "覺得高檔食材不能浪費，不疑有他，全部吃光光補身體。", feedback: "【總管 困惑】奇怪...夫人吃完後，怎麼晚上的奶水量明顯變少了？小少爺看來沒吃飽呢。", affects: [{char: 'chef', val: -20, status: '擔憂'}], healthVal: -20, expr: 'shocked' },
+                  { text: "感到極度無奈與疲憊，不知道該怎麼跟膳房溝通，內心十分沮喪。", feedback: "【總管 柔聲寬慰】夫人莫要憂心，產後身心勞累奴才都明白。您先歇著，奴才去請教蘇醫女正確的月子膳食，一定讓您吃得舒心。", affects: [{char: 'chef', val: -10, status: '惶恐'}], healthVal: -10, expr: 'shocked' }
+        ]},
+            { type: "interaction", imageId: "chef", character: "膳房 總管",
+              story: [{ imageId: "chef", character: "膳房 總管", text: "「夫人，天氣炎熱，奴才給您泡了一壺特濃的冰鎮茶葉！」\n【調養小記】：哺乳媽媽一天的咖啡因攝取量應以 300 毫克為上限。過量咖啡因會導致寶寶煩躁不安、不好睡。" }],
+              question: "【咖啡因迷思】面對特濃茶葉，夫人該怎麼做？",
+              options: [
+                  { text: "婉拒特濃茶，請總管換成溫開水或無咖啡因的紅棗茶。", feedback: "【總管 點頭】夫人思慮周全，奴才這就去換溫熱的紅棗茶來！", affects: [{char: 'chef', val: 20, status: '死心塌地'}], healthVal: 20, expr: 'happy' },
+                  { text: "太渴了，直接把特濃茶一飲而盡，連續喝好幾壺。", feedback: "【總管 擔憂】夫人喝這麼多濃茶...今晚小主子怕是要煩躁得睡不著了。", affects: [{char: 'chef', val: -20, status: '惶恐'}], healthVal: -20, expr: 'shocked' },
+                  { text: "把冰茶潑在總管身上，大罵他想凍壞主母的腸胃！", feedback: "【總管 跌倒】奴才該死！但夫人您這脾氣也太暴躁了...", affects: [{char: 'chef', val: -40, status: '覺得荒唐'}], healthVal: -30, expr: 'angry' }
+            ]}
         ],
         'doctor': [
-            {img:"doctor", char:"太醫 張大人", q:"【含乳姿勢】為避免乳頭破損，正確的含乳姿勢應該是？", s:["張太醫：「夫人，小主子若含乳姿勢不對，只含住乳頭會導致微血管破損流血。」\n\n【衛教小知識】：正確含乳應讓寶寶嘴巴張大，含住「大部分的乳暈」，下巴貼緊乳房，才能有效吸吮且保護皮膚。"],
-             opts:[{t:"讓寶寶嘴巴張大，下巴緊貼乳房，含住大部分的乳暈吸吮。", fb:"【太醫 點頭稱是】夫人處理得非常得當！大口含住乳暈才能正確擠壓乳腺，親餵才不會痛！", af:[{c:'doctor',v:25,s:'欣慰'}], h:25, ex:'happy'},
-                   {t:"做母親的忍一忍就過去了，只要寶寶含住乳頭最前端用力吸就好。", fb:"【太醫 搖頭嘆息】萬萬不可強忍！只含乳頭不僅吸不到奶，而且很快就會導致嚴重破損與發炎啊。", af:[{c:'doctor',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
-                   {t:"破損太痛了，內心感到恐懼，決定徹底放棄哺乳改餵水。", fb:"【太醫 柔聲規勸】夫人莫怕，親餵初期的確是個考驗。破損處塗抹少許母乳便能天然修復，微臣這就讓醫女來協助您調整姿勢，切莫沮喪。", af:[{c:'doctor',v:-10,s:'關切'}], h:-10, ex:'shocked'}]},
-            {img:"doctor", char:"太醫 張大人", q:"【夜間猛長期】面對猛長期的頻繁夜奶，您該如何調適？", s:["半夜，小少爺頻繁討奶。太醫勸您喝濃茶提神撐著餵。\n\n【衛教小知識】：猛長期需配合寶寶頻繁躺餵。切勿飲用濃茶（咖啡因會影響寶寶睡眠）。"],
-             opts:[{t:"斥退濃茶，明白這是猛長期，採用躺餵並同步補眠。", fb:"【眾人 嘆服】夫人明智！躺餵並同步補眠，才是親餵長久之計！", af:[{c:'doctor',v:20,s:'欣慰'},{c:'maid',v:10,s:'安心'}], h:25, ex:'happy'},
-                   {t:"喝下濃茶，強撐著疲憊的身軀坐直餵奶一整夜。", fb:"【太醫 驚呼】濃茶咖啡因會影響寶寶，且您嚴重剝奪睡眠險些暈厥！", af:[{c:'doctor',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
-                   {t:"極度崩潰，不餵了，把孩子丟給下人！", fb:"【眾人 體諒】夫人這幾日確實累壞了。但驟然停餵容易塞奶發炎，請讓奴婢們協助您躺餵休息吧。", af:[{c:'maid',v:-10,s:'心疼'}], h:-20, ex:'shocked'}]}
+            { type: "quiz", imageId: "doctor", character: "太醫 張大人",
+              story: [{ imageId: "doctor", character: "太醫 張大人", text: "「夫人，小主子若含乳姿勢不對，只含住乳頭會導致微血管破損流血。」\n【調養小記】：正確含乳應讓寶寶嘴巴張大，含住「大部分的乳暈」，下巴貼緊乳房，才能有效吸吮且保護皮膚碼。」" }],
+              question: "【含乳姿勢】為避免乳頭破損，正確的含乳姿勢應該是？",
+              options: [
+                  { text: "讓寶寶嘴巴張大，下巴緊貼乳房，含住大部分的乳暈吸吮。", feedback: "【太醫 點頭稱是】夫人處理得非常得當！大口含住乳暈才能正確擠壓乳腺，親餵才不會痛！", affects: [{char: 'doctor', val: 25, status: '欣慰'}], healthVal: 25, expr: 'happy' },
+                  { text: "做母親的忍一忍就過去了，只要寶寶含住乳頭最前端用力吸就好。", feedback: "【太醫 搖頭嘆息】萬萬不可強忍！只含乳頭不僅吸不到奶，而且很快就會導致嚴重破損與發炎啊。", affects: [{char: 'doctor', val: -15, status: '擔憂'}], healthVal: -15, expr: 'shocked' },
+                  { text: "破損太痛了，內心感到恐懼，決定徹底放棄哺乳改餵水。", feedback: "【太醫 柔聲規勸】夫人莫怕，親餵初期的確是個考驗。破損處塗抹少許母乳便能天然修復，微臣這就讓醫女來協助您調整姿勢，切莫沮喪。", affects: [{char: 'doctor', val: -10, status: '關切'}], healthVal: -10, expr: 'shocked' }
+            ]},
+            { type: "quiz", imageId: "doctor", character: "太醫 張大人",
+              story: [{ imageId: "doctor", character: "太醫 張大人", text: "「夫人這是『生理性脹奶』了，切記溫和處理，不可強行推擠硬揉。」\n【調養小記】：生理性脹奶時，餵奶「前」可微溫敷放鬆，餵奶「後」冷敷舒緩紅腫熱痛，並勤讓寶寶吸吮。」" }],
+              question: "【脹痛護理】面對乳房生理性脹痛，夫人該如何溫和處置？",
+              options: [
+                  { text: "餵奶前微溫敷流暢乳汁，餵奶後冷敷舒緩，並多讓寶寶親餵。", feedback: "【太醫 撫鬚讚賞】孺子可教！冷熱敷交替能有效舒緩脹痛且不傷乳腺組織！", affects: [{char: 'doctor', val: 25, status: '醫者父母心'}], healthVal: 25, expr: 'happy' },
+                  { text: "命丫鬟用最大的手勁，死命揉捏按壓胸部的硬塊直到推散為止。", feedback: "【太醫 驚呼阻止】使不得啊！產後微血管脆弱，強行硬推會導致嚴重的微血管破裂與乳腺發炎啊！", affects: [{char: 'doctor', val: -20, status: '擔憂'}], healthVal: -20, expr: 'shocked' },
+                  { text: "痛到掉眼淚，完全不想碰乳房，任由它越來越脹、越來越硬。", feedback: "【太醫 體諒安慰】初為人母確實不易，這脹痛最是磨人。夫人別怕，微臣這就命醫女用高麗菜葉為您冷敷排空，咱們溫和處理。", affects: [{char: 'doctor', val: -10, status: '關切'}], healthVal: -10, expr: 'shocked' }
+            ]},
+            { type: "interaction", imageId: "doctor", character: "太醫 張大人",
+              story: [{ imageId: "player", character: "{playerName}", text: "半夜，小少爺頻繁討奶（猛長期）。春桃喊著要補配方奶，太醫則勸您喝濃茶提神撐著餵。\n【調養小記】：猛長期需配合寶寶頻繁躺餵。切勿飲用濃茶（咖啡因會影響寶寶睡眠）。" }],
+              question: "【夜間猛長期】面對猛長期的頻繁夜奶，您該如何調適？",
+              options: [
+                  { text: "斥退濃茶，明白這是猛長期，採用躺餵並同步補眠。", feedback: "【眾人 嘆服】夫人明智！躺餵並同步補眠，才是親餵長久之計！", affects: [{char:'doctor', val:20, status:'欣慰'}, {char:'maid', val:15, status:'安心'}], healthVal: 20, expr: 'happy' },
+                  { text: "喝下濃茶，強撐著疲憊的身躯坐直餵奶一整夜。", feedback: "【太醫 驚呼】濃茶咖啡因會影響寶寶，且您嚴重剝奪睡眠險些暈厥！", affects: [{char:'maid', val:-15, status:'心疼'}, {char:'doctor', val:-20, status:'氣急敗壞'}], healthVal: -20, expr: 'shocked' },
+                  { text: "（大發雷霆）吵死了！不餵了，把孩子丟給下人！", feedback: "【眾人 驚恐】您突然不餵會引發嚴重的石頭奶塞奶啊！", affects: [{char:'maid', val:-30, status:'心寒'}, {char:'doctor', val:-30, status:'心寒'}], healthVal: -30, expr: 'angry' }
+            ]},
+            { type: "quiz", imageId: "doctor", character: "太醫 張大人",
+              story: [{ imageId: "doctor", character: "太醫 張大人", text: "「夫人，您稍微有些感冒症狀，但請勿驚慌。」\n【調養小記】：感冒病毒多透過飛沫傳染，不會經由母乳傳染。媽媽戴口罩並勤洗手，仍可持續哺乳，母乳中的抗體反而能保護寶寶。" }],
+              question: "【感冒哺乳】夫人不小心著涼感冒了，這時該怎麼辦？",
+              options: [
+                  { text: "戴上口罩，勤洗手後繼續親餵，讓寶寶獲得抗體。", feedback: "【太醫 撫鬚】夫人睿智！母乳中的抗體在此時更是保護寶寶的良藥。", affects: [{char: 'doctor', val: 20, status: '醫者父母心'}], healthVal: 20, expr: 'happy' },
+                  { text: "擔心傳染給寶寶，立刻停止親餵，隔離三天。", feedback: "【太醫 嘆氣】驟然停餵不僅會讓您塞奶，寶寶也失去了抗體的保護。", affects: [{char: 'doctor', val: -20, status: '無奈搖頭'}], healthVal: -20, expr: 'shocked' },
+                  { text: "不管它，對著寶寶又親又咳，還亂吃來路不明的成藥。", feedback: "【太醫 震怒】萬萬不可！亂吃藥與飛沫傳染會對小少爺造成極大危險！", affects: [{char: 'doctor', val: -40, status: '強烈厭惡'}], healthVal: -30, expr: 'angry' }
+            ]}
         ],
         'medic': [
-            {img:"medic", char:"醫女 蘇氏", q:"【尋乳信號】看到寶寶的早期尋乳信號，夫人該怎麼做？", s:["蘇氏：「夫人，小主子轉頭舔唇、把小手放進嘴裡，這是在發出『尋乳信號』了。」\n\n【衛教小知識】：舔唇、尋乳反射、吃手是飢餓的早期信號。若等到嚎啕大哭已是過度飢餓，反而容易抗拒含乳。"],
-             opts:[{t:"趁他情緒安穩、尚未大哭前，趕緊抱過來依需求親餵。", fb:"【蘇醫女 欣喜】夫人抓時機抓得真準！這時餵奶寶寶情緒穩定，含乳也會最順利！", af:[{c:'medic',v:25,s:'崇敬'}], h:25, ex:'happy'},
-                   {t:"嚴格遵守長輩定時四小時餵一次的規矩，時間沒到先別理他。", fb:"【蘇醫女 柔聲提醒】夫人，初生嬰兒胃口小，不能嚴格限制時間喔。等他哭鬧厲害時，往往就因為太餓而不好含乳了呢。", af:[{c:'medic',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
-                   {t:"覺得寶寶一直吃手是不乖的壞習慣，拿手套把他的小手綁起來。", fb:"【蘇醫女 趕忙解釋】夫人誤會小少爺了，吃手是新生兒天生的尋乳反射，這是在告訴您他想喝奶了呢，這是聰明的表現喔。", af:[{c:'medic',v:-10,s:'關切'}], h:-10, ex:'shocked'}]},
-            {img:"medic", char:"醫女 蘇氏", q:"【安撫迷思】面對剛出生幾天寶寶的哭鬧，正確的安撫首選是？", s:["蘇氏：「夫人，為防寶寶產生『乳頭混淆』，在親餵尚未順暢的前幾週，建議先不要使用橡膠安撫奶嘴。」\n\n【衛教小知識】：過早給予安撫奶嘴可能會影響寶寶正確含乳的學習。"],
-             opts:[{t:"多與寶寶進行肌膚接觸，或是直接抱起來進行依需求親餵安撫。", fb:"【蘇醫女 欣喜】非常正確！媽媽的乳房是寶寶最好的安撫，這樣也最能刺激母乳分泌！", af:[{c:'medic',v:25,s:'崇敬'}], h:25, ex:'happy'},
-                   {t:"為了圖省事，只要寶寶一哭就立刻塞進安撫奶嘴，定時才餵奶。", fb:"【蘇醫女 溫柔提醒】夫人，這時候少爺的吸吮本能還在建立，過早用奶嘴容易讓他混淆，之後可能會抗拒媽媽的乳房喔。", af:[{c:'medic',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
-                   {t:"有些不知所措，覺得自己照顧不好寶寶，感到焦慮挫折。", fb:"【蘇醫女 給予擁抱】夫人別沮喪，每個媽媽都是從頭學起的。有奴婢在，咱們一塊兒拍嗝、抱抱他，寶寶能感受到您的愛的。", af:[{c:'medic',v:-5,s:'關切'}], h:-10, ex:'shocked'}]}
+            { type: "quiz", imageId: "medic", character: "醫女 蘇氏",
+              story: [{ imageId: "medic", character: "醫女 蘇氏", text: "「夫人，小主子轉頭舔唇、把小手放進嘴裡，這是在發出『尋乳信號』了。」\n【調養小記】：舔唇、尋乳反射、吃手是飢餓的早期信號。若等到嚎啕大哭已是過度飢餓，反而容易抗拒含乳。" }],
+              question: "【尋乳信號】看到寶寶的早期尋乳信號，夫人該怎麼做？",
+              options: [
+                  { text: "趁他情緒安穩、尚未大哭前，趕緊抱過來依需求親餵。", feedback: "【蘇醫女 欣喜】夫人抓時機抓得真準！這時餵奶寶寶情緒穩定，含乳也會最順利！", affects: [{char: 'medic', val: 25, status: '崇敬'}], healthVal: 25, expr: 'happy' },
+                  { text: "嚴格遵守長輩定時四小時餵一次的規矩，時間沒到先別理他。", feedback: "【蘇醫女 柔聲提醒】夫人，初生嬰兒胃口小，不能嚴格限制時間喔。等他哭鬧厲害時，往往就因為太餓而不好含乳了呢。", affects: [{char: 'medic', val: -15, status: '擔憂'}], healthVal: -15, expr: 'shocked' },
+                  { text: "覺得寶寶一直吃手是不乖的壞習慣，拿手套把他的小手綁起來。", feedback: "【蘇醫女 趕忙解釋】夫人誤會小少爺了，吃手是新生兒天生的尋乳反射，這是在告訴您他想喝奶了呢，這是聰明的表現喔。", affects: [{char: 'medic', val: -10, status: '關切'}], healthVal: -10, expr: 'shocked' }
+            ]},
+            { type: "quiz", imageId: "medic", character: "醫女 蘇氏",
+              story: [{ imageId: "medic", character: "醫女 蘇氏", text: "「夫人，為防寶寶產生『乳頭混淆』，在親餵尚未順暢的前幾週，建議先不要使用橡膠安撫奶嘴。」" }],
+              question: "【安撫迷思】面對剛出生幾天寶寶的哭鬧，正確的安撫首選是？",
+              options: [
+                  { text: "多與寶寶進行肌膚接觸，或是直接抱起來進行依需求親餵安撫。", feedback: "【蘇醫女 欣喜】非常正確！媽媽的乳房是寶寶最好的安撫，這樣也最能刺激母乳分泌！", affects: [{char: 'medic', val: 25, status: '崇敬'}], healthVal: 25, expr: 'happy' },
+                  { text: "為了圖省事，只要寶寶一哭就立刻塞進安撫奶嘴，定時才餵奶。", feedback: "【蘇醫女 溫柔提醒】夫人，這時候少爺的吸吮本能還在建立，過早用奶嘴容易讓他混淆，之後可能會抗拒媽媽的乳房喔。", affects: [{char: 'medic', val: -15, status: '擔憂'}], healthVal: -15, expr: 'shocked' },
+                  { text: "有些不知所措，覺得自己照顧不好寶寶，感到焦慮挫折。", feedback: "【蘇醫女 給予擁抱】夫人別沮喪，每個媽媽都是從頭學起的。有奴婢在，咱們一塊兒拍嗝、抱抱他，寶寶能感受到您的愛的。", affects: [{char: 'medic', val: -5, status: '關切'}], healthVal: -10, expr: 'shocked' }
+            ]},
+            { type: "quiz", imageId: "medic", character: "醫女 蘇氏",
+              story: [{ imageId: "medic", character: "醫女 蘇氏", text: "「夫人，您要學習如何用手擠奶（Hand Expression），以防塞奶。」\n【調養小記】：手擠奶應將大拇指與食指放在乳暈後方（C型握法），向胸壁內壓再相對擠壓，不可在皮膚上滑動摩擦。" }],
+              question: "【手擠奶技巧】關於手擠奶的正確手法，夫人該怎麼做？",
+              options: [
+                  { text: "以C型握法壓在乳暈後方，向胸壁內壓後再相對擠壓，不摩擦皮膚。", feedback: "【蘇醫女 欣喜】手法非常標準！這樣能有效將乳管內的奶水擠出且不痛。", affects: [{char: 'medic', val: 20, status: '知音'}], healthVal: 20, expr: 'happy' },
+                  { text: "用力掐住乳頭最前端，像擠檸檬一樣用力往外拉扯。", feedback: "【蘇醫女 驚呼】萬萬不可！拉扯乳頭根本擠不出奶，只會導致破皮破裂！", affects: [{char: 'medic', val: -20, status: '焦急萬分'}], healthVal: -20, expr: 'shocked' },
+                  { text: "在皮膚上塗滿精油，用刮痧板在乳房上用力推滑。", feedback: "【蘇醫女 落淚】夫人！乳腺極其脆弱，用力刮痧會導致嚴重的微血管破裂！", affects: [{char: 'medic', val: -40, status: '心灰意冷'}], healthVal: -30, expr: 'angry' }
+            ]},
+            { type: "quiz", imageId: "medic", character: "醫女 蘇氏",
+              story: [{ imageId: "medic", character: "醫女 蘇氏", text: "「夫人，小主子喝完奶後嘴角流出一些奶水（溢奶）。」\n【調養小記】：新生兒胃部賁門括約肌發育未完全，容易溢奶。只要體重正常增加且無嗆到，拍嗝排氣並保持口腔清潔即可。" }],
+              question: "【溢奶處理】面對寶寶輕微的溢奶，夫人該如何處置？",
+              options: [
+                  { text: "這是正常現象。幫寶寶拍嗝排氣，並輕輕擦拭保持清潔。", feedback: "【蘇醫女 欣喜】夫人處變不驚！只要寶寶體重正常增加，輕微溢奶無需擔憂。", affects: [{char: 'medic', val: 20, status: '知音'}], healthVal: 20, expr: 'happy' },
+                  { text: "他生重病了！立刻把他倒吊過來用力拍打背部！", feedback: "【蘇醫女 驚呼】萬萬不可！倒吊拍打會讓溢奶變成嚴重的嗆奶窒息！", affects: [{char: 'medic', val: -20, status: '焦急萬分'}], healthVal: -20, expr: 'shocked' },
+                  { text: "敢吐我的奶？給他灌下三大碗黃連苦茶治一治！", feedback: "【蘇醫女 痛心】夫人！新生兒腸胃怎能承受黃連苦茶，您快住手！", affects: [{char: 'medic', val: -40, status: '心灰意冷'}], healthVal: -30, expr: 'angry' }
+            ]}
         ]
     };
 
-    // ==========================================
-    // 5. 存檔系統
-    // ==========================================
-    function saveGame() {
-        localStorage.setItem("BJS", JSON.stringify({d:day,P,Q:QPool,sn:selN,sf:selF,sc:selC,sb:selB}));
-        fTexts.push(new FloatingText(400,200,"【進度已儲存】","#6ff")); SE.save();
+    function replacePlayerVars(text) {
+        if (!text) return "";
+        return text.replace(/{playerName}/g, player.name)
+                   .replace(/{residence}/g, player.residence);
     }
-    function loadGame() {
-        let s=localStorage.getItem("BJS"); 
-        if(s){try{let d=JSON.parse(s); day=d.d; P=d.P; QPool=d.Q; selN=d.sn; selF=d.sf; selC=d.sc; selB=d.sb; isEarlyEnd=false; state=STATES.DAY_TRANSITION; SE.win(); return true;}catch(e){}} 
-        return false;
-    }
-    function hasSaveGame() { return localStorage.getItem("BJS")!==null; }
 
-    function initG() {
-        isEarlyEnd = false; earlyEndChar = ""; P.score = 50;
-        for(let k in P.aff) { P.aff[k].c = 50; P.aff[k].t = 50; P.aff[k].s = "平淡"; }
-        for(let k in QPool) {
-            QPool[k].forEach(q => q.opts = shuf([...q.opts]));
-            QPool[k] = shuf([...QPool[k]]);
+    // ==========================================
+    // 遊戲核心邏輯 
+    // ==========================================
+    function shuffleArray(array) {
+        let curId = array.length;
+        while (0 !== curId) {
+            let randId = Math.floor(Math.random() * curId);
+            curId -= 1;
+            let tmp = array[curId]; array[curId] = array[randId]; array[randId] = tmp;
         }
-        day = 1; storyLine = 0; currentExpr = 'normal'; state = STATES.DAY_TRANSITION;
+        return array;
     }
 
-    function checkEnd() { for(let k in P.aff) if(P.aff[k].t <= 10) { isEarlyEnd = true; earlyEndChar = k; return; } }
+    function initGame() {
+        isEarlyGameOver = false;
+        earlyGameOverCharId = "";
+        player.knowledgeScore = 50; 
+        for(let key in player.affections) {
+            player.affections[key].current = 50;
+            player.affections[key].target = 50;
+            player.affections[key].status = "平淡";
+        }
+        
+        for(let key in allQuestionPools) {
+            questionPools[key] = shuffleArray([...allQuestionPools[key]]);
+        }
+        
+        currentDay = 1;
+        currentStoryLine = 0;
+        currentExpr = 'normal';
+        currentState = STATES.DAY_TRANSITION;
+    }
 
-    function applyOpt(opt) {
-        let oY = 250, hasP = false, hasN = false;
-        P.score += opt.h; currentExpr = opt.ex;
-        opt.af.forEach(r => {
-            let tc = P.aff[r.c]; tc.t = Math.max(0, Math.min(tc.m, tc.t + r.v)); tc.s = r.s;
-            let c = r.v >= 0 ? tc.col : "#94a1b2", s = r.v >= 0 ? "+" : "";
-            fTexts.push(new FloatingText(canvas.width/2, oY, `${tc.n} ${s}${r.v}`, c)); oY -= 40;
-            if(r.v > 0) { hasP = true; for(let i=0;i<20;i++) pts.push(new Conf(canvas.width/2,400,tc.col)); }
-            else { hasN = true; for(let i=0;i<15;i++) pts.push(new DAura(canvas.width/2,400)); }
+    function checkEarlyGameOver() {
+        // 如果好感度極低，改為觸發體諒歇息結局，不給予嚴厲懲罰
+        for (const key in player.affections) {
+            if (player.affections[key].target <= 10) {
+                isEarlyGameOver = true;
+                earlyGameOverCharId = key;
+                return;
+            }
+        }
+    }
+
+    function applyChoices(chosenOption) {
+        let offsetY = 250;
+        let hasPositive = false;
+        let hasNegative = false;
+        
+        player.knowledgeScore += chosenOption.healthVal;
+        currentExpr = chosenOption.expr;
+
+        chosenOption.affects.forEach((r) => {
+            let targetChar = player.affections[r.char];
+            targetChar.target = Math.max(0, Math.min(targetChar.max, targetChar.target + r.val)); 
+            targetChar.status = r.status;
+            
+            let color = r.val >= 0 ? targetChar.color : "#6c7a89";
+            let sign = r.val >= 0 ? "+" : "";
+            let text = `${targetChar.name} ${sign}${r.val}`;
+            
+            floatingTexts.push(new FloatingText(canvas.width / 2, offsetY, text, color));
+            offsetY -= 40;
+
+            if(r.val > 0) {
+                hasPositive = true;
+                for (let i = 0; i < 20; i++) particles.push(new Confetti(canvas.width / 2, 400, targetChar.color));
+            } else {
+                hasNegative = true;
+                for (let i = 0; i < 15; i++) particles.push(new DarkAura(canvas.width / 2, 400));
+            }
         });
-        if(opt.af.length===0 && opt.h<0) { hasN = true; for(let i=0;i<15;i++) pts.push(new DAura(canvas.width/2,400)); }
-        if(hasP) { flash.a=0.3; flash.c='#fff'; sfxs.push(new GRing(canvas.width/2,350)); }
-        if(currentExpr==='angry' || currentExpr==='shocked') {
-            if(hasN) { shake = 5; flash.a=0.2; flash.c='#ffaaaa'; sfxs.push(new RSlash(canvas.width/2,350)); }
+
+        if(chosenOption.affects.length === 0 && chosenOption.healthVal < 0) {
+            hasNegative = true;
+            for (let i = 0; i < 15; i++) particles.push(new DarkAura(canvas.width / 2, 400));
         }
-        checkEnd();
+
+        if (hasPositive) { 
+            flashAlpha = 0.3; flashColor = '#ffffff'; 
+            specialEffects.push(new GoldenRing(canvas.width / 2, 350));
+        }
+        
+        if (currentExpr === 'angry' || currentExpr === 'shocked') {
+            if (hasNegative) {
+                shakeAmount = 5; 
+                flashAlpha = 0.2; flashColor = '#e74c3c'; 
+                specialEffects.push(new RedSlash(canvas.width / 2, 350));
+            }
+        }
+        checkEarlyGameOver();
     }
 
-    function trigSummon(rId) {
-        if(QPool[rId] && QPool[rId].length > 0) {
-            currentStage = QPool[rId].pop(); 
+    function triggerSummon(roleId) {
+        if(questionPools[roleId] && questionPools[roleId].length > 0) {
+            currentStage = questionPools[roleId].pop();
+            if(currentStage.options) {
+                currentStage.options = shuffleArray(currentStage.options);
+            }
         } else {
             currentStage = {
-                char: P.aff[rId].n, img: rId,
-                s: ["「夫人喚微臣/奴婢前來，可是身子有些勞累？產後多休息，保持心情愉悅是最好的調養喔。」"], 
-                q: "【後宅關懷】面對下人的貼心問候，您打算？", 
-                opts: shuf([
-                    {t: "微笑點頭，詢問今日少爺的照護狀況。", fb: "大家都為夫人的溫和明理感到如沐春風。", af: [{c: rId, v: 15, s: '欣慰'}], h: 15, ex: 'happy'}, 
-                    {t: "覺得有些疲倦，點點頭讓他們先下去忙吧。", fb: "大家體諒夫人產後虛弱，輕聲告退讓您好好歇息。", af: [{c: rId, v: 5, s: '安心'}], h: 10, ex: 'normal'}, 
-                    {t: "內心感到有些煩躁，不想多說話，揮揮手翻身睡去。", fb: "下人貼心地替您拉好蠶絲被，叮囑大家動作放輕。", af: [{c: rId, v: 0, s: '關切'}], h: 5, ex: 'normal'}
+                type: "quiz", imageId: roleId, character: player.affections[roleId].name,
+                story: [{ imageId: roleId, character: player.affections[roleId].name, text: "「夫人喚微臣/奴婢前來，可是身子有些勞累？產後多休息，保持心情愉悅是最好的調養喔。」" }],
+                question: "【後宅關懷】面對下人的貼心問候，您打算？",
+                options: shuffleArray([
+                    { text: "微笑點頭，詢問今日少爺的照護狀況。", feedback: "大家都為夫人的溫和明理感到如沐春風。", affects: [{char: roleId, val: 15, status: '欣慰'}], healthVal: 15, expr: 'happy' },
+                    { text: "覺得有些疲倦，點點頭讓他們先下去忙吧。", feedback: "大家體諒夫人產後虛弱，輕聲告退讓您好好歇息。", affects: [{char: roleId, val: 5, status: '安心'}], healthVal: 10, expr: 'normal' },
+                    { text: "內心感到有些煩躁，不想多說話，揮揮手翻身睡去。", feedback: "春桃貼心地替您拉好蠶絲被，叮囑大家動作放輕，別驚擾了夫人。", affects: [{char: roleId, val: 0, status: '關切'}], healthVal: 5, expr: 'normal' }
                 ])
             };
         }
-        storyLine = 0; state = STATES.STORY;
+        currentStoryLine = 0;
+        currentState = STATES.STORY;
     }
 
-    function genEnd() {
-        endScenes = []; endIdx = 0; let totAff = 0; for(let k in P.aff) totAff += P.aff[k].t;
-        if(isEarlyEnd) {
-            eType = 'bad'; eTitle = "【結局：稍作歇息，尋求支援】"; eColor = "#ffb3ba";
-            let cN = P.aff[earlyEndChar].n, fT = "";
-            if(earlyEndChar==='maid') fT=`「${P.name}...您看來太累了。這幾日您為了少爺操碎了心，請讓奴婢多為您分擔一些吧，您先好好歇息。」`;
-            else if(earlyEndChar==='chef') fT="「夫人胃口不佳，定是奴才伺候不周。產後調養非一日之功，夫人莫急，奴才再去熬碗溫熱的清湯。」";
-            else if(earlyEndChar==='doctor') fT="「夫人脈象虛浮，切莫過於操勞。母乳哺育固然重要，但母親的鳳體安康才是根本啊。」";
-            else if(earlyEndChar==='medic') fT="「夫人，哺餵母乳是一條漫長且充滿挑戰的路。若真的累了，稍微依靠一下旁人也無妨的。」";
-            endScenes.push({role: earlyEndChar, expr: 'shocked', n: `【${cN} 的體諒】`, t: fT});
-            endScenes.push({role: 'baby', expr: 'normal', n: "【暫時的休息】", t: "看著您日夜操勞，老夫人特地安排了經驗豐富的老嬤嬤來幫忙照看小少爺，好讓您能安心休養身子。"});
-            endScenes.push({role: 'medic', expr: 'happy', n: "【來日方長】", t: "產後需要適應的事情太多，適時放手並尋求專業外援協助，也是一種愛自己與愛孩子的智慧。您辛苦了，好好睡一覺吧！"});
-        } else {
-            if(P.score>=80 && totAff>=200) {
-                eType='good'; eTitle="【結局：游刃有餘，溫慧主母】"; eColor="#ffccd5";
-                endScenes.push({role: 'baby', expr: 'normal', n: "【幸福滿月】", t: `在您的用心調養與科學哺餵下，小少爺迎來了滿月。看著他白胖健康的模樣，所有的付出都化為了滿滿的幸福。`});
-                endScenes.push({role: 'maid', expr: 'happy', n: "【後宅和樂】", t: "府內上下對您的智慧與溫和讚不絕口，下人們盡心伺候，後宅一派祥和，為您建立強大的育兒後盾。"});
-                endScenes.push({role: 'player', expr: 'happy', n: "【美滿豐收】", t: "張太醫與醫女常稱讚您的調養手法。您不僅成功在母嬰健康中取得平衡，更體會到了為人母的喜悅與自信！"});
-            } else if(totAff>=160) {
-                eType='normal'; eTitle="【結局：漸入佳境，來日方長】"; eColor="#ffe4b5";
-                endScenes.push({role: 'maid', expr: 'happy', n: "【踏實的一步】", t: `這七日的時光雖然偶有新手媽媽的生疏，但您與寶寶都在努力適應彼此，建立起良好的默契。`});
-                endScenes.push({role: 'player', expr: 'happy', n: "【溫暖支持】", t: "下人們看著您體貼且努力的模樣，無不盡力給予協助。母乳與調養之路雖然需要時間，但有大家的陪伴，未來定能越來越好。"});
-            } else {
-                eType='normal'; eTitle="【結局：新手上路，溫柔以待】"; eColor="#b0c4de";
-                endScenes.push({role: 'doctor', expr: 'shocked', n: "【給予空間】", t: `剛經歷完生產，身心疲憊在所難免。面對繁瑣的餵奶與調養知識，一時感到力不從心也是完全正常的。`});
-                endScenes.push({role: 'player', expr: 'normal', n: "【擁抱自己】", t: "這只是第一週，您已經跨出了最勇敢的一步。不要給自己太大的壓力，放慢腳步，給自己和寶寶多一點時間與溫柔，大家都深深支持著您。"});
+    function generateEndingScenes() {
+        endingScenes = [];
+        currentEndingSceneIndex = 0;
+        
+        let totalAffection = 0;
+        for(let k in player.affections) totalAffection += player.affections[k].target;
+        let knowledge = player.knowledgeScore;
+
+        if (isEarlyGameOver) {
+            endingType = 'bad';
+            finalEndingTitle = "【結局：稍作歇息，尋求支援】"; 
+            finalEndingColor = "#d66b7a"; // 柔和的紅色
+            let charName = player.affections[earlyGameOverCharId].name;
+            let firstSceneText = "";
+            if(earlyGameOverCharId === 'maid') firstSceneText = `「${player.name}...您看來太累了。這幾日您為了少爺操碎了心，請讓奴婢多為您分擔一些吧，您先好好歇息。」`;
+            else if(earlyGameOverCharId === 'chef') firstSceneText = "「夫人胃口不佳，定是奴才伺候不周。產後調養非一日之功，夫人莫急，奴才再去熬碗溫熱的清湯。」";
+            else if(earlyGameOverCharId === 'doctor') firstSceneText = "「夫人脈象虛浮，切莫過於操勞。母乳哺育固然重要，但母親的鳳體安康才是根本啊。」";
+            else if(earlyGameOverCharId === 'medic') firstSceneText = "「夫人，哺餵母乳是一條漫長且充滿挑戰的路。若真的累了，稍微依靠一下旁人也無妨的。」";
+
+            endingScenes.push({ role: earlyGameOverCharId, expr: 'shocked', name: `【${charName} 的體諒】`, text: firstSceneText });
+            endingScenes.push({ role: 'baby', expr: 'normal', name: "【暫時的休息】", text: "看著您日夜操勞，老夫人特地安排了經驗豐富的老嬤嬤來幫忙照看小少爺，好讓您能安心休養身子。" });
+            endingScenes.push({ role: 'medic', expr: 'happy', name: "【來日方長】", text: "產後需要適應的事情太多，適時放手並尋求專業外援協助，也是一種愛自己與愛孩子的智慧。您辛苦了，好好睡一覺吧！" });
+        } 
+        else {
+            if (knowledge >= 90 && totalAffection >= 240) {
+                endingType = 'good';
+                finalEndingTitle = "【結局：游刃有餘，溫慧主母】";
+                finalEndingColor = "#c0392b"; 
+                endingScenes.push({ role: 'baby', expr: 'normal', name: "【幸福滿月】", text: `在您的用心調養與科學哺餵下，小少爺迎來了滿月。看著他白胖健康的模樣，所有的付出都化為了滿滿的幸福。` });
+                endingScenes.push({ role: 'maid', expr: 'happy', name: "【後宅和樂】", text: "府內上下對您的智慧與溫和讚不絕口，下人們盡心伺候，後宅一派祥和，為您建立強大的育兒後盾。" });
+                endingScenes.push({ role: player.avatarId, expr: 'happy', name: "【美滿豐收】", text: "張太醫與醫女常稱讚您的調養手法。您不僅成功在母嬰健康中取得平衡，更體會到了為人母的喜悅與自信！" });
+            } 
+            else if (totalAffection >= 200) {
+                endingType = 'normal';
+                finalEndingTitle = "【結局：漸入佳境，來日方長】";
+                finalEndingColor = "#d35400"; 
+                endingScenes.push({ role: 'maid', expr: 'happy', name: "【踏實的一步】", text: `這七日的時光雖然偶有新手媽媽的生疏，但您與寶寶都在努力適應彼此，建立起良好的默契。` });
+                endingScenes.push({ role: player.avatarId, expr: 'happy', name: "【溫暖支持】", text: "下人們看著您體貼且努力的模樣，無不盡力給予協助。母乳與調養之路雖然需要時間，但有大家的陪伴，未來定能越來越好。" });
+            } 
+            else {
+                endingType = 'normal'; 
+                finalEndingTitle = "【結局：新手上路，溫柔以待】";
+                finalEndingColor = "#2980b9";
+                endingScenes.push({ role: 'doctor', expr: 'shocked', name: "【給予空間】", text: `剛經歷完生產，身心疲憊在所難免。面對繁瑣的餵奶與調養知識，一時感到力不從心也是完全正常的。` });
+                endingScenes.push({ role: player.avatarId, expr: 'normal', name: "【擁抱自己】", text: "這只是第一週，您已經跨出了最勇敢的一步。不要給自己太大的壓力，放慢腳步，給自己和寶寶多一點時間與溫柔，大家都深深支持著您。" });
             }
-            if(P.aff['maid'].t>=80) endScenes.push({role: 'maid', expr:'happy',n:"【春桃的承諾】",t:`春桃貼心地替您捏腳：「夫人，奴婢看著您學餵奶雖然辛苦，但您真了不起。奴婢一定會好好幫您分擔的！」`});
-            if(P.aff['chef'].t>=80) endScenes.push({role: 'chef', expr:'happy',n:"【總管的敬意】",t:`總管在膳房特別注意：「夫人產後脾胃嬌貴，那些生冷油膩的通通不許上，天天都要給夫人準備最好的清淡滋補湯！」`});
-            if(P.aff['doctor'].t>=80) endScenes.push({role: 'doctor', expr:'happy',n:"【太醫的讚許】",t:`張太醫懸絲診脈後微笑：「夫人氣血平穩，皆因情緒調適得當、不盲信偏方，實乃母嬰之福。」`});
-            if(P.aff['medic'].t>=80) endScenes.push({role: 'medic', expr:'happy',n:"【蘇氏的陪伴】",t:`蘇醫女常來陪您聊天、指導正確含乳：「夫人進步真快，看少爺吸吮得多好。您若累了隨時叫我，別憋在心裡喔。」`});
+
+            if (player.affections['maid'].target >= 80) {
+                endingScenes.push({ role: 'maid', expr: 'happy', name: "【春桃的承諾】", text: `春桃貼心地替您捏腳：「夫人，奴婢看著您學餵奶雖然辛苦，但您真了不起。奴婢一定會好好幫您分擔的！」` });
+            }
+            if (player.affections['chef'].target >= 80) {
+                endingScenes.push({ role: 'chef', expr: 'happy', name: "【總管的敬意】", text: `總管在膳房特別注意：「夫人產後脾胃嬌貴，那些生冷油膩的通通不許上，天天都要給夫人準備最好的清淡滋補湯！」` });
+            }
+            if (player.affections['doctor'].target >= 80) {
+                endingScenes.push({ role: 'doctor', expr: 'happy', name: "【太醫的讚許】", text: `張太醫懸絲診脈後微笑：「夫人氣血平穩，皆因情緒調適得當、不盲信偏方，實乃母嬰之福。」` });
+            }
+            if (player.affections['medic'].target >= 80) {
+                endingScenes.push({ role: 'medic', expr: 'happy', name: "【蘇氏的陪伴】", text: `蘇醫女常來陪您聊天、指導正確含乳：「夫人進步真快，看少爺吸吮得多好。您若累了隨時叫我，別憋在心裡喔。」` });
+            }
         }
     }
 
-    // ==========================================
-    // 6. UI 與觸控邏輯
-    // ==========================================
-    function handleClick() {
-        if(state===STATES.START) {
-            if(isHov({x:300,y:450,w:200,h:60})) { SE.click(); state=STATES.CREATION; }
-            if(hasS()&&isHov({x:300,y:550,w:200,h:60})) { SE.click(); if(loadGame()) return; }
-        } else if(state===STATES.CREATION) {
-            if(isHov(UI.nL)){SE.click();selN=(selN-1+NList.length)%NList.length;} if(isHov(UI.nR)){SE.click();selN=(selN+1)%NList.length;}
-            if(isHov(UI.rL)){SE.click();selB=(selB-1+BList.length)%BList.length;} if(isHov(UI.rR)){SE.click();selB=(selB+1)%BList.length;}
-            if(isHov(UI.fL)){SE.click();selF=(selF-1+FList.length)%FList.length;} if(isHov(UI.fR)){SE.click();selF=(selF+1)%FList.length;}
-            if(isHov(UI.cL)){SE.click();selC=(selC-1+CList.length)%CList.length;} if(isHov(UI.cR)){SE.click();selC=(selC+1)%CList.length;}
-            if(isHov(UI.cfBtn)){SE.click();P.name=NList[selN]; P.id=`player_${FList[selF]}_${CList[selC]}`; P.origin=BList[selB]; P.residence=residences[selB]; initG();}
-        } else if(state===STATES.DAY_TRANSITION) {
-            SE.click();
-            if(day===1) { currentStage=introStage; if(currentStage.opts) currentStage.opts=shuf(currentStage.opts); state=STATES.STORY; }
-            else if(day===3) { currentStage=originStages[P.origin]; if(currentStage.opts) currentStage.opts=shuf(currentStage.opts); state=STATES.STORY; }
-            else state=STATES.MAP;
-        } else if(state===STATES.MAP) {
-            let rId=null; if(isHov(UI.maps.maid)) rId='maid'; else if(isHov(UI.maps.chef)) rId='chef'; else if(isHov(UI.maps.doc)) rId='doctor'; else if(isHov(UI.maps.med)) rId='medic';
-            if(rId){SE.click(); trigSummon(rId);}
-        } else if(state===STATES.STORY) {
-            SE.click(); storyLine++; if(storyLine>=currentStage.s.length) state=STATES.QUESTION;
-        } else if(state===STATES.QUESTION) {
-            for(let i=0;i<3;i++) {
-                if(isHov(UI.btns[i])) {
-                    let opt=currentStage.opts[i]; fbText=opt.fb; applyOpt(opt);
-                    if(opt.h>0)SE.win(); else SE.fail(); state=STATES.FEEDBACK; break;
+    // 繪製角色 (支援缺圖時的 Fallback 佔位符)
+    function drawCharacter(roleId, expr, x, y, width, height) {
+        let targetKey = `${roleId}_${expr}`;
+        let img = loadedImages.chars[targetKey] || loadedImages.chars[`${roleId}_normal`];
+        
+        if (img && img.complete && img.naturalWidth > 0) {
+            ctx.drawImage(img, x, y, width, height);
+        } else {
+            // Fallback (若尚未放圖片的佔位顯示)
+            ctx.fillStyle = 'rgba(230, 220, 200, 0.8)';
+            ctx.fillRect(x + 20, y + 40, width - 40, height - 40);
+            ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 2;
+            ctx.strokeRect(x + 20, y + 40, width - 40, height - 40);
+            ctx.fillStyle = '#a03b2d'; ctx.font = '20px Kaiti'; ctx.textAlign = 'center';
+            ctx.fillText("尚無圖片", x + width / 2, y + height / 2);
+            ctx.font = '14px Kaiti';
+            ctx.fillText(targetKey, x + width / 2, y + height / 2 + 30);
+        }
+    }
+
+    // --- 主動畫迴圈 ---
+    function gameLoop(timestamp) {
+        time = timestamp / 1000;
+        ctx.save();
+        
+        if (shakeAmount > 0) {
+            ctx.translate((Math.random() - 0.5) * shakeAmount, (Math.random() - 0.5) * shakeAmount);
+            shakeAmount *= 0.85; if(shakeAmount < 0.5) shakeAmount = 0;
+        }
+
+        let currentLoc = '侯府正廳';
+        let currentDayWeather = 'sunny';
+        
+        // 結局天氣覆蓋機制
+        if (currentState === STATES.ENDING_ANIMATION || currentState === STATES.END) {
+            if (endingType === 'bad') {
+                currentLoc = '避風暖閣';
+                currentDayWeather = 'rainy';
+            } else if (endingType === 'good') {
+                currentLoc = '侯府花園';
+                currentDayWeather = 'sunny';
+            } else {
+                currentLoc = '雅致書閣';
+                currentDayWeather = 'cloudy';
+            }
+        } else if (currentState === STATES.CREATION) {
+            currentLoc = residences[selectedResIndex];
+        } else if (currentState !== STATES.START) {
+            let currentDayData = daysData[Math.min(currentDay - 1, daysData.length - 1)];
+            currentLoc = currentDayData.location === 'player_residence' ? player.residence : currentDayData.location;
+            currentDayWeather = currentDayData.weather;
+        }
+
+        // 渲染高清背景圖片
+        let bgImg = loadedImages.bg[currentLoc];
+        if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
+            // 裁切或拉伸填滿畫布
+            ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+        } else {
+            // 預設亮色系漸層背景 (如果還沒放圖)
+            let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#fdfaf2');
+            grad.addColorStop(1, '#eadecc');
+            ctx.fillStyle = grad; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#b58c5c'; ctx.font = '30px Kaiti'; ctx.textAlign = 'center';
+            ctx.fillText(`(請於 assets/bg/ 加入背景圖片)`, canvas.width/2, canvas.height/2);
+        }
+        
+        if (currentState === STATES.DAY_TRANSITION || currentState === STATES.STORY || currentState === STATES.QUESTION || currentState === STATES.FEEDBACK || currentState === STATES.CREATION || currentState === STATES.INTERACT_CHOICE || currentState === STATES.INTERACT_RESULT || currentState === STATES.ENDING_ANIMATION || currentState === STATES.END) {
+            if (currentDayWeather === 'sunny') {
+                let sunGrad = ctx.createRadialGradient(canvas.width, 0, 50, canvas.width, 0, 600);
+                sunGrad.addColorStop(0, 'rgba(255, 250, 230, 0.6)');
+                sunGrad.addColorStop(0.5, 'rgba(255, 230, 180, 0.15)');
+                sunGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = sunGrad;
+                ctx.beginPath(); ctx.arc(canvas.width, 0, 600, 0, Math.PI*2); ctx.fill();
+                petals.forEach(p => { p.update(); p.draw(ctx); });
+            } else if (currentDayWeather === 'rainy') {
+                let rainIntensity = (endingType === 'bad') ? 0.3 : 0.15;
+                ctx.fillStyle = `rgba(180, 190, 200, ${rainIntensity})`; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                raindrops.forEach(r => { r.update(); r.draw(ctx); });
+            } else if (currentDayWeather === 'snowy') {
+                ctx.fillStyle = 'rgba(240, 245, 255, 0.2)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                snowflakes.forEach(s => { s.update(); s.draw(ctx); });
+            } else if (currentDayWeather === 'cloudy') {
+                let cloudIntensity = (endingType === 'normal') ? 0.3 : 0.2;
+                ctx.fillStyle = `rgba(200, 200, 200, ${cloudIntensity})`; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.beginPath(); ctx.arc(time*20 % 1000 - 100, 100, 150, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(time*15 % 1000 + 200, 50, 200, 0, Math.PI*2); ctx.fill();
+            }
+        }
+
+        if (currentState === STATES.ENDING_ANIMATION && endingType === 'bad') {
+            ctx.fillStyle = 'rgba(214, 107, 122, 0.15)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        if (currentState === STATES.ENDING_ANIMATION && endingType === 'good') {
+            if(Math.random() < 0.15) particles.push(new Confetti(canvas.width/2 + (Math.random()-0.5)*400, 50));
+        }
+
+        ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 4; ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+
+        if (currentState !== STATES.START && currentState !== STATES.CREATION && ctx.save && currentState !== STATES.END && currentState !== STATES.ENDING_ANIMATION && currentState !== STATES.DAY_TRANSITION) {
+            drawDatePanel(); drawStatsPanel();
+        }
+
+        if (currentState === STATES.START) {
+            ctx.fillStyle = 'rgba(255, 250, 240, 0.85)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 50px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(160, 59, 45, 0.2)'; ctx.shadowBlur = 10;
+            ctx.fillText("汴京娘子調養記", canvas.width / 2, 300);
+            ctx.fillStyle = '#3a2818'; ctx.font = '24px "Kaiti", serif';
+            ctx.shadowBlur = 0; 
+            ctx.fillText("— 七日奇遇溫馨陪伴版 —", canvas.width / 2, 360);
+            drawButton({x: 300, y: 500, w: 200, h: 60}, "進入侯府");
+        } 
+        else if (currentState === STATES.CREATION) {
+            ctx.fillStyle = 'rgba(255, 250, 240, 0.85)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 36px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText("【主母設定】", canvas.width / 2, 80);
+
+            ctx.fillStyle = '#3a2818'; ctx.font = 'bold 24px "Kaiti", serif';
+            
+            ctx.fillText("名諱", 160, 195);
+            drawSmallButton(UI.nameLeft, "<"); drawSmallButton(UI.nameRight, ">");
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 26px "Kaiti", serif';
+            ctx.fillText(namesList[selectedNameIndex], 355, 195);
+
+            ctx.fillStyle = '#3a2818';
+            ctx.fillText("臉型", 160, 315);
+            drawSmallButton(UI.faceLeft, "<"); drawSmallButton(UI.faceRight, ">");
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 26px "Kaiti", serif';
+            ctx.fillText(faceNames[selectedFaceIndex], 355, 315);
+
+            ctx.fillStyle = '#3a2818';
+            ctx.fillText("服飾", 160, 435);
+            drawSmallButton(UI.clothLeft, "<"); drawSmallButton(UI.clothRight, ">");
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 26px "Kaiti", serif';
+            ctx.fillText(clothNames[selectedClothIndex], 355, 435);
+
+            ctx.fillStyle = '#3a2818';
+            ctx.fillText("出身", 160, 555);
+            drawSmallButton(UI.resLeft, "<"); drawSmallButton(UI.resRight, ">");
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 26px "Kaiti", serif';
+            ctx.fillText(backgrounds[selectedResIndex], 355, 555);
+
+            let bScale = 1.3 + Math.sin(time * 2.5) * 0.015;
+            let previewId = `player_${faceKeys[selectedFaceIndex]}_${clothKeys[selectedClothIndex]}`;
+            ctx.save(); ctx.translate(650, 400); ctx.scale(1, bScale);
+            drawCharacter(previewId, 'normal', -150, -200, 300, 400);
+            ctx.restore();
+
+            drawButton(UI.confirmBtn, "踏入侯府");
+        }
+        else if (currentState === STATES.DAY_TRANSITION) {
+            let dayInfo = daysData[Math.min(currentDay - 1, daysData.length - 1)];
+            ctx.fillStyle = 'rgba(255, 250, 240, 0.9)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 46px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText(`產後第 ${currentDay} 天`, canvas.width / 2, 350);
+            ctx.fillStyle = '#3a2818'; ctx.font = '24px "Kaiti", serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+            let lines = getLines(ctx, dayInfo.event, 500);
+            for(let i=0; i<lines.length; i++){ ctx.fillText(lines[i], 150, 450 + (i * 35)); }
+            ctx.textBaseline = 'alphabetic';
+            ctx.globalAlpha = (Math.sin(time * 5) + 1) / 2 * 0.5 + 0.5;
+            ctx.fillStyle = '#b58c5c'; ctx.font = 'bold 20px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText("▼ 點擊開始調理 ▼", canvas.width / 2, 700);
+            ctx.globalAlpha = 1.0;
+        }
+        else if (currentState === STATES.INTERACT_CHOICE) {
+            let bScale = 1 + Math.sin(time * 2.5) * 0.015;
+            ctx.save(); ctx.translate(canvas.width / 2, 100 + 125); ctx.scale(1, bScale);
+            drawCharacter(player.avatarId, 'normal', -150, -200, 300, 400);
+            ctx.restore();
+
+            drawDialogueBox("【後宅相處】", "今日剛用完發奶湯水，趁著孩兒安穩睡去，夫人打算找誰商議調理細節？", false);
+            drawButton(UI.interactBtns[0], "傳召【丫鬟春桃】問話");
+            drawButton(UI.interactBtns[1], "詢問【膳房總管】食材");
+            drawButton(UI.interactBtns[2], "向【太醫張大人】請安");
+            drawButton(UI.interactBtns[3], "與【醫女蘇氏】切磋醫理");
+        }
+        else if (currentState === STATES.ENDING_ANIMATION) {
+            let scene = endingScenes[currentEndingSceneIndex];
+            let bounceY = Math.sin(time * 3) * 5;
+            
+            let charName = scene.role === 'baby' ? '內心獨白' : 
+                           (scene.role === player.avatarId ? player.name : (player.affections[scene.role] ? player.affections[scene.role].name : "未知"));
+            
+            let roleId = scene.role;
+            ctx.save(); ctx.translate(canvas.width / 2, 100 + bounceY + 125);
+            let bScale = 1 + Math.sin(time * 2.5) * 0.015;
+            ctx.scale(1, bScale);
+            drawCharacter(roleId, scene.expr || 'normal', -150, -200, 300, 400);
+            ctx.restore();
+            
+            let tagY = 350 + bounceY;
+            ctx.fillStyle = 'rgba(252, 248, 242, 0.95)'; ctx.fillRect(canvas.width/2 - 80, tagY, 160, 40);
+            ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 2; ctx.strokeRect(canvas.width/2 - 80, tagY, 160, 40);
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 22px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText(charName, canvas.width/2, tagY + 27);
+            
+            drawDialogueBox(scene.name, scene.text);
+        }
+        else if (currentState !== STATES.END) {
+            const stage = currentStage;
+            
+            let displayRole = stage.imageId || 'baby';
+            let displayCharName = stage.character || '系統';
+            let displayStoryText = stage.story[currentStoryLine];
+
+            if (displayStoryText && typeof displayStoryText === 'object') {
+                displayRole = displayStoryText.imageId || displayRole;
+                displayCharName = displayStoryText.character || displayCharName;
+                displayStoryText = displayStoryText.text;
+            } else if (!displayStoryText && currentStoryLine >= stage.story.length) {
+                let lastStory = stage.story[stage.story.length - 1];
+                if (lastStory && typeof lastStory === 'object') {
+                    displayRole = lastStory.imageId || displayRole;
+                    displayCharName = lastStory.character || displayCharName;
                 }
             }
-        } else if(state===STATES.FEEDBACK) {
-            SE.click();
-            if(isEarlyEnd){ genEnd(); state=STATES.END_ANIM; shake=25; flash.a=0.5; flash.c='#f00'; }
-            else { day++; storyLine=0; currentExpr='normal'; saveGame(); if(day>7){genEnd();state=STATES.END_ANIM;}else state=STATES.DAY_TRANSITION; }
-        } else if(state===STATES.END_ANIM) {
-            SE.click(); endIdx++;
-            if(endIdx>=endScenes.length) { state=STATES.END; if(eType==='good'){flash.a=0.6;flash.c='#fff';} }
-            else { let ex=endScenes[endIdx].expr; if(ex==='angry'){shake=10;flash.a=0.2;flash.c='#f00';} if(ex==='happy'){flash.a=0.2;flash.c='#fff';} }
-        } else if(state===STATES.END) {
-            if(isHov({x:300,y:750,w:200,h:60})) { SE.click(); state=STATES.START; }
+
+            if (displayRole === 'player') displayRole = player.avatarId;
+            if (displayCharName === '{playerName}') displayCharName = player.name;
+            
+            displayStoryText = replacePlayerVars(displayStoryText);
+            let qText = replacePlayerVars(stage.question);
+            let feedbackText = replacePlayerVars(selectedOptionFeedback);
+
+            let bounceY = Math.sin(time * 3) * 5;
+            let drawExpr = (currentState === STATES.FEEDBACK) ? currentExpr : 'normal';
+            if(drawExpr === 'angry') drawExpr = 'normal'; // 溫和化處理
+
+            ctx.save(); ctx.translate(canvas.width / 2, 100 + bounceY + 125);
+            let bScale = 1 + Math.sin(time * (drawExpr === 'angry' ? 5.0 : 2.5)) * 0.015;
+            ctx.scale(1, bScale);
+            drawCharacter(displayRole, drawExpr, -150, -200, 300, 400);
+            ctx.restore();
+            
+            let tagY = 350 + bounceY;
+            ctx.fillStyle = 'rgba(252, 248, 242, 0.95)'; ctx.fillRect(canvas.width/2 - 80, tagY, 160, 40);
+            ctx.strokeStyle = '#b58c5c'; ctx.lineWidth = 2; ctx.strokeRect(canvas.width/2 - 80, tagY, 160, 40);
+            ctx.fillStyle = '#a03b2d'; ctx.font = 'bold 22px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText(displayCharName, canvas.width/2, tagY + 27);
+
+            if (currentState === STATES.STORY) {
+                drawDialogueBox("【劇情與調養】", displayStoryText);
+            } 
+            else if (currentState === STATES.QUESTION) {
+                let qTitle = stage.type === "interaction" ? "【溫馨互動】" : "【請夫人定奪】";
+                drawDialogueBox(qTitle, qText, false);
+                stage.options.forEach((opt, idx) => {
+                    let optText = replacePlayerVars(opt.text);
+                    drawButton(UI.btns[idx], "方式 " + (idx+1) + "：" + optText);
+                });
+            } 
+            else if (currentState === STATES.FEEDBACK) {
+                drawDialogueBox("【調理成效】", feedbackText);
+            }
+        }
+        
+        if (currentState === STATES.END) {
+            let overlayGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            overlayGrad.addColorStop(0, 'rgba(255, 250, 240, 0.75)');
+            overlayGrad.addColorStop(0.5, 'rgba(255, 250, 240, 0.9)');
+            overlayGrad.addColorStop(1, 'rgba(255, 250, 240, 1)');
+            ctx.fillStyle = overlayGrad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = finalEndingColor; ctx.font = 'bold 44px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText(finalEndingTitle, canvas.width / 2, 300);
+            
+            ctx.fillStyle = '#3a2818'; ctx.font = '24px "Kaiti", serif'; ctx.textAlign = 'center';
+            ctx.fillText("大宋調養生活告一段落...", canvas.width / 2, 370);
+
+            ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+            let lines = getLines(ctx, replacePlayerVars(endingScenes[endingScenes.length-1].text), 560);
+            for(let i=0; i<lines.length; i++) {
+                ctx.fillText(lines[i], 120, 430 + (i * 38));
+            }
+            ctx.textBaseline = 'alphabetic';
+            drawButton({x: 300, y: 700, w: 200, h: 60}, "再行體驗");
+        }
+
+        particles = particles.filter(p => p.life > 0); particles.forEach(p => { p.update(); p.draw(ctx); });
+        specialEffects = specialEffects.filter(e => e.life > 0); specialEffects.forEach(e => { e.update(); e.draw(ctx); });
+        floatingTexts = floatingTexts.filter(t => t.life > 0); floatingTexts.forEach(t => { t.update(); t.draw(ctx); });
+
+        if (flashAlpha > 0) {
+            ctx.fillStyle = flashColor; ctx.globalAlpha = flashAlpha;
+            ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1.0;
+            flashAlpha *= 0.85; 
+        }
+
+        ctx.restore(); requestAnimationFrame(gameLoop);
+    }
+
+    function handleInteraction(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        let scaleX = canvas.width / rect.width; let scaleY = canvas.height / rect.height;
+        mouse.x = (clientX - rect.left) * scaleX; mouse.y = (clientY - rect.top) * scaleY;
+
+        if (currentState === STATES.START) {
+            if (isHovered({x: 300, y: 500, w: 200, h: 60})) {
+                currentState = STATES.CREATION;
+            }
+        } 
+        else if (currentState === STATES.CREATION) {
+            if (isHovered(UI.nameLeft)) selectedNameIndex = (selectedNameIndex - 1 + namesList.length) % namesList.length;
+            if (isHovered(UI.nameRight)) selectedNameIndex = (selectedNameIndex + 1) % namesList.length;
+            
+            if (isHovered(UI.faceLeft)) selectedFaceIndex = (selectedFaceIndex - 1 + faceKeys.length) % faceKeys.length;
+            if (isHovered(UI.faceRight)) selectedFaceIndex = (selectedFaceIndex + 1) % faceKeys.length;
+            
+            if (isHovered(UI.clothLeft)) selectedClothIndex = (selectedClothIndex - 1 + clothKeys.length) % clothKeys.length;
+            if (isHovered(UI.clothRight)) selectedClothIndex = (selectedClothIndex + 1) % clothKeys.length;
+            
+            if (isHovered(UI.resLeft)) selectedResIndex = (selectedResIndex - 1 + backgrounds.length) % backgrounds.length;
+            if (isHovered(UI.resRight)) selectedResIndex = (selectedResIndex + 1) % backgrounds.length;
+            
+            if (isHovered(UI.confirmBtn)) {
+                player.name = namesList[selectedNameIndex];
+                player.avatarId = `player_${faceKeys[selectedFaceIndex]}_${clothKeys[selectedClothIndex]}`;
+                player.origin = backgrounds[selectedResIndex];
+                player.residence = residences[selectedResIndex];
+                initGame();
+            }
+        }
+        else if (currentState === STATES.DAY_TRANSITION) {
+            if (currentDay === 1) {
+                currentStage = introStage;
+                if(currentStage.options) currentStage.options = shuffleArray(currentStage.options);
+                currentState = STATES.STORY;
+            } else if (currentDay === 3) {
+                currentStage = originStages[player.origin];
+                if(currentStage.options) currentStage.options = shuffleArray(currentStage.options);
+                currentState = STATES.STORY;
+            } else {
+                currentState = STATES.INTERACT_CHOICE;
+            }
+        }
+        else if (currentState === STATES.INTERACT_CHOICE) {
+            if (isHovered(UI.interactBtns[0])) triggerSummon('maid');
+            else if (isHovered(UI.interactBtns[1])) triggerSummon('chef');
+            else if (isHovered(UI.interactBtns[2])) triggerSummon('doctor');
+            else if (isHovered(UI.interactBtns[3])) triggerSummon('medic');
+        }
+        else if (currentState === STATES.STORY) {
+            const stage = currentStage;
+            currentStoryLine++;
+            if (currentStoryLine >= stage.story.length) currentState = STATES.QUESTION;
+        } 
+        else if (currentState === STATES.QUESTION) {
+            const stage = currentStage;
+            for(let i=0; i<3; i++) {
+                if (isHovered(UI.btns[i])) {
+                    let chosen = stage.options[i];
+                    selectedOptionFeedback = chosen.feedback;
+                    applyChoices(chosen); 
+                    currentState = STATES.FEEDBACK;
+                    break;
+                }
+            }
+        } 
+        else if (currentState === STATES.FEEDBACK) {
+            if (isEarlyGameOver) {
+                generateEndingScenes();
+                currentState = STATES.ENDING_ANIMATION;
+                flashAlpha = 0.3; flashColor = '#fdf5e6'; 
+            } else {
+                currentDay++;
+                currentStoryLine = 0; currentExpr = 'normal'; 
+                if (currentDay > 7) {
+                    generateEndingScenes(); currentState = STATES.ENDING_ANIMATION;
+                } else {
+                    currentState = STATES.DAY_TRANSITION; 
+                }
+            }
+        }
+        else if (currentState === STATES.ENDING_ANIMATION) {
+            currentEndingSceneIndex++;
+            if (currentEndingSceneIndex >= endingScenes.length) {
+                currentState = STATES.END; 
+                if (endingType === 'good') { flashAlpha = 0.5; flashColor = '#ffffff'; }
+                else if (endingType === 'bad') { flashAlpha = 0.4; flashColor = '#fdf5e6'; } 
+            } else {
+                let scene = endingScenes[currentEndingSceneIndex];
+                if(scene.expr === 'happy') { flashAlpha = 0.2; flashColor = '#ffffff'; }
+            }
+        }
+        else if (currentState === STATES.END) {
+             if (isHovered({x: 300, y: 700, w: 200, h: 60})) currentState = STATES.START;
         }
     }
 
-    canvas.addEventListener('mousedown', e => { SE.init(); updateMouse(e.clientX, e.clientY); handleClick(); });
-    canvas.addEventListener('touchstart', e => { e.preventDefault(); SE.init(); updateMouse(e.touches[0].clientX, e.touches[0].clientY); handleClick(); }, {passive: false});
-    canvas.addEventListener('mousemove', e => updateMouse(e.clientX, e.clientY));
+    canvas.addEventListener('mousedown', e => handleInteraction(e.clientX, e.clientY));
+    canvas.addEventListener('touchstart', e => { e.preventDefault(); handleInteraction(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
+    canvas.addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = (e.clientX - rect.left) * (canvas.width / rect.width);
+        mouse.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    });
     canvas.addEventListener('selectstart', e => e.preventDefault());
     
     requestAnimationFrame(gameLoop);
+
 </script>
 </body>
 </html>
