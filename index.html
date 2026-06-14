@@ -5,33 +5,73 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>汴京娘子調養記 - 終極完整版</title>
     <style>
-        body{margin:0;padding:0;display:flex;justify-content:center;align-items:center;height:100vh;background-color:#0b1021;font-family:'Kaiti','標楷體',serif;overflow:hidden;}
-        #game-container{width:100%;height:100%;display:flex;justify-content:center;align-items:center;}
-        canvas{max-width:100vw;max-height:100vh;aspect-ratio:8/9;background-color:#080c1a;box-shadow:0 0 40px rgba(0,0,0,0.9);border:4px solid #8b6b4a;border-radius:8px;object-fit:contain;touch-action:none;}
+        body {
+            margin: 0; padding: 0;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; background-color: #0b1021;
+            font-family: 'Kaiti', '標楷體', serif; overflow: hidden; 
+        }
+        #game-container {
+            width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+        }
+        canvas {
+            max-width: 100vw; max-height: 100vh; aspect-ratio: 8 / 9;
+            background-color: #080c1a; box-shadow: 0 0 40px rgba(0,0,0,0.9);
+            border: 4px solid #8b6b4a; border-radius: 8px;
+            object-fit: contain; touch-action: none;
+        }
     </style>
 </head>
 <body>
-<div id="game-container"><canvas id="gameCanvas" width="800" height="900"></canvas></div>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="900"></canvas>
+</div>
+
 <script>
-    // --- 1. 音效引擎 ---
+    // ==========================================
+    // 1. 音效引擎 (Web Audio API)
+    // ==========================================
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const SE = {
-        play: (f, t, d, v=0.1) => {
-            if(audioCtx.state === 'suspended') audioCtx.resume();
-            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-            o.type = t; o.frequency.setValueAtTime(f, audioCtx.currentTime);
-            g.gain.setValueAtTime(v, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime+d);
-            o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+d);
+    const SoundEngine = {
+        playTone: function(freq, type, duration, vol=0.1) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
         },
-        hover:()=>SE.play(600,'sine',0.1,0.05), click:()=>SE.play(400,'square',0.1,0.1),
-        win:()=>{setTimeout(()=>SE.play(523.25,'sine',0.2,0.1),0);setTimeout(()=>SE.play(659.25,'sine',0.2,0.1),100);setTimeout(()=>SE.play(783.99,'sine',0.4,0.1),200);},
-        fail:()=>{setTimeout(()=>SE.play(200,'sawtooth',0.3,0.1),0);setTimeout(()=>SE.play(150,'sawtooth',0.4,0.1),150);},
-        save:()=>{setTimeout(()=>SE.play(880,'sine',0.1,0.05),0);setTimeout(()=>SE.play(1760,'sine',0.3,0.05),100);}
+        hover: function() { this.playTone(600, 'sine', 0.1, 0.05); },
+        click: function() { this.playTone(400, 'square', 0.1, 0.1); },
+        success: function() {
+            setTimeout(() => this.playTone(523.25, 'sine', 0.2, 0.1), 0);
+            setTimeout(() => this.playTone(659.25, 'sine', 0.2, 0.1), 100);
+            setTimeout(() => this.playTone(783.99, 'sine', 0.4, 0.1), 200);
+        },
+        error: function() {
+            setTimeout(() => this.playTone(200, 'sawtooth', 0.3, 0.1), 0);
+            setTimeout(() => this.playTone(150, 'sawtooth', 0.4, 0.1), 150);
+        },
+        save: function() {
+            setTimeout(() => this.playTone(880, 'sine', 0.1, 0.05), 0);
+            setTimeout(() => this.playTone(1760, 'sine', 0.3, 0.05), 100);
+        }
     };
 
-    // --- 2. 系統變數 ---
-    const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
-    const STATES = {START:0, CREATION:1, DAY_TRANSITION:2, MAP:3, STORY:4, QUESTION:5, FEEDBACK:6, END_ANIM:7, END:8};
+    // ==========================================
+    // 2. 系統變數與設定
+    // ==========================================
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const STATES = { START: 0, CREATION: 1, DAY_TRANSITION: 2, MAP_EXPLORE: 3, STORY: 4, QUESTION: 5, FEEDBACK: 6, ENDING_ANIMATION: 7, END: 8 };
     let state = STATES.START, day = 1, currentStage = null, storyLine = 0, fbText = "", time = 0;
     let mouse = {x:-100, y:-100}, lastHover = null, currentExpr = 'normal', shake = 0, flash = {a:0, c:'#fff'};
     let pts = [], fTexts = [], sfxs = [], bgCvs = {};
@@ -58,7 +98,9 @@
         { d: "產後第七天", w: "sunny", l: "侯府花園", e: "轉眼已至第七日，您在大家的陪伴下，順利完成了初期的調養適應。" }
     ];
 
-    // --- 3. 資料庫壓縮 ---
+    // ==========================================
+    // 3. 衛教題庫與劇情
+    // ==========================================
     const introStage = {type:"quiz", img:"medic", char:"醫女 蘇氏", q:"【起始抉擇】望著孩兒，您在心中暗暗定下規矩：",
         s: ["【大宋汴京 · 侯府內宅】\n我是這座侯府的主母。昨日歷經千辛萬苦，終於平安誕下了小少爺。", "「初為人母，事事皆新。我定要好好學習調養與育兒技巧，照顧好少爺，也保重自己的鳳體。」", "蘇醫女輕聲說：「夫人，現在為您進行產後『早期肌膚接觸』。這能讓寶寶身心穩定，刺激荷爾蒙分泌，是啟動哺育的黃金關鍵。」\n【衛教小知識】：母乳含有豐富的天然抗體與生長因子，能為寶寶建立強大的腸道免疫系統。"],
         opts: [
@@ -66,6 +108,7 @@
             {t:"怕寶寶著涼，用厚厚的蠶絲包巾把他包得緊緊的再抱著。", fb:"【蘇醫女 溫柔提醒】夫人，包得太厚就無法達到『肌膚接觸』的效果了。這會阻礙寶寶依靠觸覺尋找乳房的本能喔。", af:[{c:'medic',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
             {t:"身心實在太累了，決定先推去嬰兒室，暫時交給其他人照顧。", fb:"【蘇醫女 輕聲勸解】夫人辛苦了，產後疲憊是正常的。若能撐過這段黃金接觸期，之後的泌乳與親餵會更加順暢，咱們慢慢來。", af:[{c:'medic',v:-25,s:'關切'}], h:-20, ex:'shocked'}
         ]};
+        
     const originStages = {
         '名門嫡女': {type:"quiz", img:"doctor", char:"太醫 張大人", q:"【嫡女專屬支線】面對老夫人的賞賜與太醫的勸告，您該如何應對？",
             s:["老夫人派人送來了極其珍貴的『千年人參湯』，指名要給我補身子。","太醫張大人：「夫人！這千年人參雖是大補，但對產婦而言，卻是退奶的大忌啊！」\n【衛教小知識】：人參、韭菜、麥芽水等都是常見的退奶食物，哺乳期應避開。"],
@@ -92,9 +135,9 @@
     
     let QPool = {
         'maid': [
-            {img:"maid", char:"丫鬟 春桃", q:"【初乳迷思】面對春桃的疑慮，夫人該如何回應？", s:["春桃：「夫人...這初乳又黃又濃，而且量這麼少，這怎麼夠小少爺塞牙縫呀？」\n【衛教小知識】：初乳量雖少，但富含抗體。新生兒胃第一天僅有彈珠大小，少量初乳絕對足夠。"],
-             opts:[{t:"初乳是抗體精華，新生兒胃只有彈珠大，這點量足夠了。", fb:"【春桃 恍然大悟】原來如此！這初乳竟是給小少爺最好的保護，奴婢受教了！", af:[{c:'maid',v:25,s:'崇拜'}], h:25, ex:'happy'},
-                   {t:"妳說得對，奶水確實太少了，快去熬點濃米湯來給少爺墊墊肚子。", fb:"【春桃 慌張】可是...蘇醫女說新生兒腸胃弱不能喝米湯，這法子好像不太安全呢。", af:[{c:'maid',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
+            {img:"maid", char:"丫鬟 春桃", q:"【初乳迷思】面對春桃的疑慮，夫人該如何回應？", s:["春桃：「夫人...這初乳又黃又濃，而且量這麼少，這怎麼夠小少爺塞牙縫呀？」\n【衛教小知識】：初乳量雖少，但富含抗體與生長因子。新生兒胃第一天僅有彈珠大小，少量初乳絕對足夠。"],
+             opts:[{t:"初乳是抗體精華，新生兒胃只有彈珠大，這點量足夠了。", fb:"【春桃 恍然大悟】原來如此！這金黃色的初乳竟是給小少爺最好的保護，奴婢受教了！", af:[{c:'maid',v:25,s:'崇拜'}], h:25, ex:'happy'},
+                   {t:"妳說得對，奶水確實太少了，快去熬點濃米湯來給少爺墊墊肚子。", fb:"【春桃 慌張】可是...蘇醫女說新生兒腸胃弱不能喝米湯，夫人，這法子好像不太安全呢。", af:[{c:'maid',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
                    {t:"聽得心煩意亂，不知如何是好，有些自責是不是自己身體不好。", fb:"【春桃 趕忙安慰】夫人快別這麼說！您千萬別焦慮，奴婢這就去請教蘇醫女，您好好放鬆身心。", af:[{c:'maid',v:-10,s:'關切'}], h:-10, ex:'shocked'}]},
             {img:"maid", char:"丫鬟 春桃", q:"【飽足判斷】判斷寶寶有沒有吃飽，最客觀科學的指標是？", s:["春桃：「夫人，母奶看起來好稀，小主子喝母乳是不是很容易餓，真的有吃飽嗎？」\n【衛教小知識】：判斷吃飽最客觀的指標是尿布量。出生第四天後，一天若有6片以上沉甸甸的濕尿布即代表進食充足。"],
              opts:[{t:"觀察尿布。一天有 6 片以上沉甸甸濕尿布便是有吃飽了。", fb:"【春桃 恍然大悟】原來如此！看尿量最準確，奴婢這就去拿小本子記尿布！", af:[{c:'maid',v:25,s:'崇拜'}], h:25, ex:'happy'},
@@ -108,7 +151,7 @@
                    {t:"覺得胃口全無，什麼進補的湯水都不想喝，打算空腹一整天。", fb:"【總管 慌忙規勸】夫人不愛吃油膩的奴才明白，但產後身子虛可不能不吃東西，奴才這就去熬一碗清淡的鮮魚湯來。", af:[{c:'chef',v:-10,s:'惶恐'}], h:-10, ex:'shocked'}]},
             {img:"chef", char:"膳房 總管", q:"【退奶地雷】看到這份點心，身為親餵媽媽的您該如何指示？", s:["總管：「夫人，這是奴才特別為您準備的『韭菜炒雞蛋』配『人參溫補茶』！」\n【衛教小知識】：哺乳期應避開退奶三大地雷食物：人參、韭菜、大麥芽水。"],
              opts:[{t:"婉拒這兩樣食材，告知人參和韭菜容易退奶，請總管換成溫熱黑豆水。", fb:"【總管 驚出一身冷汗】哎呀！竟不知這兩樣是退奶大忌！多虧夫人博學，奴才這就去換黑豆水！", af:[{c:'chef',v:25,s:'敬佩'}], h:25, ex:'happy'},
-                   {t:"覺得高檔食材不能浪費，不疑有他，全部吃光光補身體。", fb:"【總管 困惑】奇怪...夫人吃完後，怎麼晚上的奶水量明顯變少了？小少爺看來沒吃飽呢。", af:[{c:'chef',v:-20,s:'擔憂'}], h:-20, ex:'shocked'},
+                   {t:"不疑有他，這都是高級食材，全部吃光光補身體。", fb:"【總管 困惑】奇怪...夫人吃完後，怎麼晚上的奶水量明顯變少了？小少爺看來沒吃飽呢。", af:[{c:'chef',v:-20,s:'擔憂'}], h:-20, ex:'shocked'},
                    {t:"感到極度無奈與疲憊，不知道該怎麼跟膳房溝通，內心十分沮喪。", fb:"【總管 柔聲寬慰】夫人莫要憂心，產後身心勞累奴才都明白。您先歇著，奴才去請教蘇醫女正確的月子膳食，一定讓您吃得舒心。", af:[{c:'chef',v:-10,s:'惶恐'}], h:-10, ex:'shocked'}]}
         ],
         'doctor': [
@@ -132,6 +175,36 @@
                    {t:"有些不知所措，覺得自己照顧不好寶寶，感到焦慮挫折。", fb:"【蘇醫女 給予擁抱】夫人別沮喪，每個媽媽都是從頭學起的。有奴婢在，咱們一塊兒拍嗝、抱抱他，寶寶能感受到您的愛的。", af:[{c:'medic',v:-5,s:'關切'}], h:-10, ex:'shocked'}]}
         ]
     };
+
+    // ==========================================
+    // 4. 儲存系統
+    // ==========================================
+    const SAVE_KEY = "BianjingNursingGameSaveV2";
+
+    function saveGame() {
+        const saveData = {
+            d: currentDay, P: P, Q: QPool,
+            sn: selN, sf: selF, sc: selC, sb: selB
+        };
+        localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+        fTexts.push(new FText(canvas.width / 2, 200, "【進度已儲存】", "#66ff66"));
+        SoundEngine.save();
+    }
+
+    function loadGame() {
+        const savedStr = localStorage.getItem(SAVE_KEY);
+        if (savedStr) {
+            try {
+                const d = JSON.parse(savedStr);
+                currentDay = d.d; P = d.P; QPool = d.Q;
+                selN = d.sn; selF = d.sf; selC = d.sc; selB = d.sb;
+                isEarlyEnd = false; state = STATES.DAY_TRANSITION;
+                SoundEngine.success(); return true;
+            } catch (e) { return false; }
+        }
+        return false;
+    }
+    function hasS() { return localStorage.getItem(SAVE_KEY) !== null; }
 
     function shuf(a) { let i = a.length, r, t; while(i!==0) { r=Math.floor(Math.random()*i); i-=1; t=a[i]; a[i]=a[r]; a[r]=t; } return a; }
 
@@ -205,8 +278,8 @@
         }
     }
 
-    // --- 4. 輕量特效類別 ---
-    class Snow { constructor(){this.x=Math.random()*canvas.width;this.y=Math.random()*canvas.height-canvas.height;this.s=Math.random()*3+1;this.vy=Math.random()*1+0.5;this.vx=(Math.random()-0.5)*0.5;this.a=Math.random()*0.5+0.3;} update(){this.y+=this.vy;this.x+=this.vx;if(this.y>canvas.height){this.y=-10;this.x=Math.random()*canvas.width;}} draw(ctx){ctx.fillStyle=`rgba(255,255,255,${this.a})`;ctx.beginPath();ctx.arc(this.x,this.y,this.s,0,Math.PI*2);ctx.fill();} }
+    // --- 5. 輕量特效類別 ---
+    class Snow { constructor(){this.x=Math.random()*canvas.width;this.y=Math.random()*canvas.height-canvas.height;this.s=Math.random()*3+1;this.vy=Math.random()*1+0.5;this.vx=(Math.random()-0.5)*0.5;this.a=Math.random()*0.5+0.3;} update(){this.y+=this.vy;this.x+=this.vx;if(this.y>canvas.height){this.y=-10;this.x=Math.random()*canvas.width;}} draw(ctx){ctx.save();ctx.fillStyle=`rgba(255,255,255,${this.a})`;ctx.beginPath();ctx.arc(this.x,this.y,this.s,0,Math.PI*2);ctx.fill();ctx.restore();} }
     class Rain { constructor(){this.x=Math.random()*canvas.width;this.y=Math.random()*canvas.height-canvas.height;this.vy=Math.random()*15+10;this.l=Math.random()*20+10;} update(){this.y+=this.vy;if(this.y>canvas.height){this.y=-20;this.x=Math.random()*canvas.width;}} draw(ctx){ctx.strokeStyle='rgba(150,180,220,0.4)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(this.x,this.y);ctx.lineTo(this.x-2,this.y+this.l);ctx.stroke();} }
     class Petal { constructor(){this.x=Math.random()*canvas.width;this.y=Math.random()*canvas.height-canvas.height;this.vx=Math.random()*1+0.5;this.vy=Math.random()*1+1;this.s=Math.random()*5+3;this.ang=Math.random()*Math.PI*2;this.sp=Math.random()*0.05-0.025;} update(){this.x+=this.vx;this.y+=this.vy;this.ang+=this.sp;if(this.y>canvas.height){this.y=-10;this.x=Math.random()*canvas.width;}} draw(ctx){ctx.save();ctx.translate(this.x,this.y);ctx.rotate(this.ang);ctx.fillStyle='rgba(230,180,190,0.5)';ctx.beginPath();ctx.ellipse(0,0,this.s,this.s/2,0,0,Math.PI*2);ctx.fill();ctx.restore();} }
     class Conf { constructor(x,y,c){this.x=x;this.y=y;this.vx=(Math.random()-0.5)*16;this.vy=(Math.random()-1)*16-2;this.c=c||['#ff9999','#ffcc99','#99ccff','#ffcc00'][Math.floor(Math.random()*4)];this.l=1;this.w=Math.random()*Math.PI*2;this.ws=Math.random()*0.1+0.05;this.rot=Math.random()*Math.PI*2;this.rs=(Math.random()-0.5)*0.2;} update(){this.vx*=0.94;this.vy+=0.4;this.x+=this.vx+Math.sin(this.w)*2.5;this.y+=this.vy;this.w+=this.ws;this.rot+=this.rs;this.l-=0.015;} draw(ctx){ctx.save();ctx.globalAlpha=Math.max(0,this.l);ctx.translate(this.x,this.y);ctx.rotate(this.rot);ctx.fillStyle=this.c;ctx.fillRect(-6,-6,12,12);ctx.restore();} }
@@ -215,9 +288,13 @@
     class RSlash { constructor(x,y){this.x=x;this.y=y;this.l=1;this.p=0;} update(){this.p+=(1-this.p)*0.25;this.l-=0.025;} draw(ctx){ctx.save();ctx.globalAlpha=Math.max(0,this.l);ctx.translate(this.x,this.y);ctx.strokeStyle='#ffbbbb';ctx.lineWidth=20;ctx.lineCap='round';ctx.shadowColor='rgba(255,150,150,0.6)';ctx.shadowBlur=20;let len=100*this.p;ctx.beginPath();ctx.moveTo(-len,-len);ctx.lineTo(len,len);ctx.stroke();ctx.restore();} }
     class FText { constructor(x,y,t,c){this.x=x;this.y=y;this.t=t;this.c=c;this.l=1;this.sc=0.5;} update(){this.y-=1.2;this.l-=0.012;this.sc+=(1-this.sc)*0.2;} draw(ctx){ctx.save();ctx.globalAlpha=Math.max(0,this.l);ctx.translate(this.x,this.y);ctx.scale(this.sc,this.sc);ctx.fillStyle=this.c;ctx.font='bold 30px "Kaiti", serif';ctx.shadowColor='rgba(0,0,0,0.8)';ctx.shadowBlur=4;ctx.textAlign='center';ctx.fillText(this.t,0,0);ctx.restore();} }
 
-    for(let i=0;i<100;i++) snowflakes.push(new Snow()); for(let i=0;i<80;i++) raindrops.push(new Rain()); for(let i=0;i<30;i++) petals.push(new Petal());
+    // 加入粒子宣告
+    let snowflakes = [], raindrops = [], petals = [];
+    for(let i=0;i<100;i++) snowflakes.push(new Snow()); 
+    for(let i=0;i<80;i++) raindrops.push(new Rain()); 
+    for(let i=0;i<30;i++) petals.push(new Petal());
 
-    // --- 5. UI繪製 ---
+    // --- 6. UI繪製 ---
     const UI = {
         box: {x:50, y:700, w:700, h:170}, 
         btns: [{x:100, y:400, w:600, h:80}, {x:100, y:500, w:600, h:80}, {x:100, y:600, w:600, h:80}],
@@ -234,7 +311,7 @@
     function isHov(b) { return mouse.x>=b.x && mouse.x<=b.x+b.w && mouse.y>=b.y && mouse.y<=b.y+b.h; }
     
     function drawBtn(b, t, isS=false) {
-        let h = isHov(b); if(h&&lastHover!==t){SE.hover();lastHover=t;}else if(!h&&lastHover===t)lastHover=null;
+        let h = isHov(b); if(h&&lastHover!==t){SoundEngine.hover();lastHover=t;}else if(!h&&lastHover===t)lastHover=null;
         ctx.fillStyle=h?'#a6855b':'rgba(139,107,74,0.9)'; ctx.fillRect(b.x,b.y,b.w,b.h);
         ctx.strokeStyle=h?'#fff':'#cdae77'; ctx.lineWidth=isS?2:(h?3:2); ctx.strokeRect(b.x,b.y,b.w,b.h);
         ctx.fillStyle=h?'#fff':'#f4ebd0'; ctx.font=isS?'bold 24px Kaiti':'22px Kaiti'; ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -242,7 +319,7 @@
     }
 
     function drawMap(z, id) {
-        let h = isHov(z); if(h&&lastHover!==z.n){SE.hover();lastHover=z.n;}else if(!h&&lastHover===z.n)lastHover=null;
+        let h = isHov(z); if(h&&lastHover!==z.n){SoundEngine.hover();lastHover=z.n;}else if(!h&&lastHover===z.n)lastHover=null;
         ctx.fillStyle=h?'rgba(100,70,50,0.9)':'rgba(44,36,27,0.85)'; ctx.fillRect(z.x,z.y,z.w,z.h);
         ctx.strokeStyle=h?'#fff':'#cdae77'; ctx.lineWidth=h?4:2; ctx.strokeRect(z.x,z.y,z.w,z.h);
         ctx.fillStyle=h?'#fff':'#ffdd66'; ctx.font='bold 28px Kaiti'; ctx.textAlign='center'; ctx.fillText(z.n,z.x+z.w/2,z.y+50);
@@ -286,7 +363,7 @@
         ctx.fillStyle='#f4ebd0'; ctx.font='bold 22px Kaiti'; ctx.textAlign='center'; ctx.fillText(n,canvas.width/2,tY+27);
     }
 
-    // --- 6. 背景與 SVG 生成 (極度壓縮版) ---
+    // --- 7. 背景與 SVG 生成 (極度壓縮版) ---
     function getBg(l) {
         if(bgCvs[l]) return bgCvs[l]; let c=document.createElement('canvas'); c.width=800; c.height=900; let bx=c.getContext('2d');
         if(l.includes('臥房')||l.includes('正房')){ let g=bx.createLinearGradient(0,0,0,900); g.addColorStop(0,"#3a0e12"); g.addColorStop(1,"#1a0505"); bx.fillStyle=g; bx.fillRect(0,0,800,900); bx.fillStyle="rgba(255,200,100,0.1)"; bx.beginPath(); bx.arc(200,300,150,0,Math.PI*2); bx.fill(); bx.strokeStyle="#0a0505"; bx.lineWidth=8; bx.beginPath(); bx.arc(200,300,150,0,Math.PI*2); bx.stroke(); bx.strokeStyle="#5a3a2a"; bx.lineWidth=4; bx.beginPath(); bx.moveTo(50,250); bx.quadraticCurveTo(150,300,250,200); bx.stroke(); bx.fillStyle="#ff6666"; bx.beginPath(); bx.arc(150,300,8,0,Math.PI*2); bx.fill(); bx.fillStyle="#1a0505"; bx.fillRect(550,100,200,800); bx.strokeStyle="#d4af37"; bx.lineWidth=3; bx.strokeRect(570,120,160,760); }
@@ -325,15 +402,15 @@
     ['maid','chef','doctor','medic','baby',...FList.flatMap(f=>CList.map(c=>`player_${f}_${c}`))]
     .forEach(r => { LImgs[r] = {}; if(r==='baby') { let i=new Image(); i.src=URL.createObjectURL(new Blob([createSVG(r,'normal')],{type:'image/svg+xml'})); LImgs[r]['normal']=i; } else { ['normal','happy','shocked','angry'].forEach(e => { let i=new Image(); i.src=URL.createObjectURL(new Blob([createSVG(r,e)],{type:'image/svg+xml'})); LImgs[r][e]=i; }); } });
 
-    // --- 7. 遊戲迴圈與邏輯 ---
+    // --- 8. 遊戲迴圈與邏輯 ---
     function rep(t) { return t?t.replace(/{playerName}/g,P.name).replace(/{residence}/g,P.residence):""; }
 
-    function save() { localStorage.setItem("BJS", JSON.stringify({d:day,P,Q:QPool,sn:selN,sf:selF,sc:selC,sb:selB})); fTexts.push(new FText(400,200,"【進度已儲存】","#6ff")); SE.save(); }
-    function load() { let s=localStorage.getItem("BJS"); if(s){try{let d=JSON.parse(s); day=d.d; P=d.P; QPool=d.Q; selN=d.sn; selF=d.sf; selC=d.sc; selB=d.sb; isEarlyEnd=false; state=STATES.DAY_TRANSITION; SE.win(); return true;}catch(e){}} return false; }
+    function save() { localStorage.setItem("BJS", JSON.stringify({d:day,P,Q:QPool,sn:selN,sf:selF,sc:selC,sb:selB})); fTexts.push(new FText(400,200,"【進度已儲存】","#6ff")); SoundEngine.save(); }
+    function load() { let s=localStorage.getItem("BJS"); if(s){try{let d=JSON.parse(s); day=d.d; P=d.P; QPool=d.Q; selN=d.sn; selF=d.sf; selC=d.sc; selB=d.sb; isEarlyEnd=false; state=STATES.DAY_TRANSITION; SoundEngine.success(); return true;}catch(e){}} return false; }
     function hasS() { return localStorage.getItem("BJS")!==null; }
 
     function gameLoop(ts) {
-        time = timestamp / 1000; ctx.save();
+        time = ts / 1000; ctx.save();
         if(shake>0) { ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake); shake*=0.85; if(shake<0.5) shake=0; }
         
         let dData = days[Math.min(day-1, days.length-1)], cLoc = dData.l, cWea = dData.w;
@@ -360,7 +437,7 @@
             ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,800,900); ctx.fillStyle='#f4ebd0'; ctx.font='bold 50px Kaiti'; ctx.textAlign='center'; ctx.shadowColor='#000'; ctx.shadowBlur=10; ctx.fillText("汴京娘子調養記",400,250); ctx.font='24px Kaiti'; ctx.fillText("— 終極衛教大作戰 (含地圖與語音) —",400,310); ctx.shadowBlur=0;
             drawBtn({x:300,y:450,w:200,h:60},"開始新局",true); if(hasS()) drawBtn({x:300,y:550,w:200,h:60},"延續前緣",true);
         } else if(state===STATES.CREATION) {
-            ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,0,800,900); ctx.fillStyle='#fdd66'; ctx.font='bold 36px Kaiti'; ctx.textAlign='center'; ctx.fillText("【主母設定】",400,80);
+            ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,0,800,900); ctx.fillStyle='#ffdd66'; ctx.font='bold 36px Kaiti'; ctx.textAlign='center'; ctx.fillText("【主母設定】",400,80);
             ctx.fillStyle='#f4ebd0'; ctx.font='24px Kaiti'; ctx.fillText("名諱",160,195); drawBtn(UI.nL,"<",true); drawBtn(UI.nR,">",true); ctx.fillStyle='#cdae77'; ctx.font='26px Kaiti'; ctx.fillText(NList[selN],355,195);
             ctx.fillStyle='#f4ebd0'; ctx.font='24px Kaiti'; ctx.fillText("臉型",160,315); drawBtn(UI.fL,"<",true); drawBtn(UI.fR,">",true); ctx.fillStyle='#cdae77'; ctx.font='26px Kaiti'; ctx.fillText(FList[selF],355,315);
             ctx.fillStyle='#f4ebd0'; ctx.font='24px Kaiti'; ctx.fillText("服飾",160,435); drawBtn(UI.cL,"<",true); drawBtn(UI.cR,">",true); ctx.fillStyle='#cdae77'; ctx.font='26px Kaiti'; ctx.fillText(CList[selC],355,435);
@@ -406,41 +483,41 @@
         let r=canvas.getBoundingClientRect(); mouse.x=(cx-r.left)*(800/r.width); mouse.y=(cy-r.top)*(900/r.height);
         
         if(state===STATES.START) {
-            if(isHov({x:300,y:450,w:200,h:60})) { SE.click(); initG(); }
-            if(hasS()&&isHov({x:300,y:550,w:200,h:60})) { SE.click(); if(load()) return; }
+            if(isHov({x:300,y:450,w:200,h:60})) { SoundEngine.click(); initG(); }
+            if(hasS()&&isHov({x:300,y:550,w:200,h:60})) { SoundEngine.click(); if(load()) return; }
         } else if(state===STATES.CREATION) {
-            if(isHov(UI.nL)){SE.click();selN=(selN-1+NList.length)%NList.length;} if(isHov(UI.nR)){SE.click();selN=(selN+1)%NList.length;}
-            if(isHov(UI.fL)){SE.click();selF=(selF-1+FList.length)%FList.length;} if(isHov(UI.fR)){SE.click();selF=(selF+1)%FList.length;}
-            if(isHov(UI.cL)){SE.click();selC=(selC-1+CList.length)%CList.length;} if(isHov(UI.cR)){SE.click();selC=(selC+1)%CList.length;}
-            if(isHov(UI.rL)){SE.click();selB=(selB-1+BList.length)%BList.length;} if(isHov(UI.rR)){SE.click();selB=(selB+1)%BList.length;}
-            if(isHov(UI.cfBtn)){SE.click();P.name=NList[selN]; P.id=`player_${FList[selF]}_${CList[selC]}`; P.origin=BList[selB]; P.residence=residences[selB]; initG();}
+            if(isHov(UI.nL)){SoundEngine.click();selN=(selN-1+NList.length)%NList.length;} if(isHov(UI.nR)){SoundEngine.click();selN=(selN+1)%NList.length;}
+            if(isHov(UI.fL)){SoundEngine.click();selF=(selF-1+FList.length)%FList.length;} if(isHov(UI.fR)){SoundEngine.click();selF=(selF+1)%FList.length;}
+            if(isHov(UI.cL)){SoundEngine.click();selC=(selC-1+CList.length)%CList.length;} if(isHov(UI.cR)){SoundEngine.click();selC=(selC+1)%CList.length;}
+            if(isHov(UI.rL)){SoundEngine.click();selB=(selB-1+BList.length)%BList.length;} if(isHov(UI.rR)){SoundEngine.click();selB=(selB+1)%BList.length;}
+            if(isHov(UI.cfBtn)){SoundEngine.click();P.name=NList[selN]; P.id=`player_${FList[selF]}_${CList[selC]}`; P.origin=BList[selB]; P.residence=residences[selB]; initG();}
         } else if(state===STATES.DAY_TRANSITION) {
-            SE.click();
+            SoundEngine.click();
             if(day===1) { currentStage=introStage; if(currentStage.opts) currentStage.opts=shuf(currentStage.opts); state=STATES.STORY; }
             else if(day===3) { currentStage=originStages[P.origin]; if(currentStage.opts) currentStage.opts=shuf(currentStage.opts); state=STATES.STORY; }
             else state=STATES.MAP;
         } else if(state===STATES.MAP) {
             let rId=null; if(isHov(UI.maps.maid)) rId='maid'; else if(isHov(UI.maps.chef)) rId='chef'; else if(isHov(UI.maps.doc)) rId='doctor'; else if(isHov(UI.maps.med)) rId='medic';
-            if(rId){SE.click(); trigSummon(rId);}
+            if(rId){SoundEngine.click(); trigSummon(rId);}
         } else if(state===STATES.STORY) {
-            SE.click(); storyLine++; if(storyLine>=currentStage.s.length) state=STATES.QUESTION;
+            SoundEngine.click(); storyLine++; if(storyLine>=currentStage.s.length) state=STATES.QUESTION;
         } else if(state===STATES.QUESTION) {
             for(let i=0;i<3;i++) {
                 if(isHov(UI.btns[i])) {
                     let opt=currentStage.opts[i]; fbText=opt.fb; applyOpt(opt);
-                    if(opt.h>0)SE.win(); else SE.fail(); state=STATES.FEEDBACK; break;
+                    if(opt.h>0)SoundEngine.success(); else SoundEngine.error(); state=STATES.FEEDBACK; break;
                 }
             }
         } else if(state===STATES.FEEDBACK) {
-            SE.click();
+            SoundEngine.click();
             if(isEarlyEnd){ genEnd(); state=STATES.END_ANIM; shake=25; flash.a=0.5; flash.c='#f00'; }
             else { day++; storyLine=0; currentExpr='normal'; save(); if(day>7){genEnd();state=STATES.END_ANIM;}else state=STATES.DAY_TRANSITION; }
         } else if(state===STATES.END_ANIM) {
-            SE.click(); endIdx++;
+            SoundEngine.click(); endIdx++;
             if(endIdx>=endScenes.length) { state=STATES.END; if(eType==='good'){flash.a=0.6;flash.c='#fff';} }
             else { let ex=endScenes[endIdx].expr; if(ex==='angry'){shake=10;flash.a=0.2;flash.c='#f00';} if(ex==='happy'){flash.a=0.2;flash.c='#fff';} }
         } else if(state===STATES.END) {
-            if(isHov({x:300,y:700,w:200,h:60})) { SE.click(); state=STATES.START; }
+            if(isHov({x:300,y:700,w:200,h:60})) { SoundEngine.click(); state=STATES.START; }
         }
     }
 
