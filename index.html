@@ -54,7 +54,7 @@
 </div>
 
 <script>
-    //    const canvas = document.getElementById('gameCanvas');
+    const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d', { alpha: false }); // 關閉 alpha 提升渲染效能
 
     // 遊戲狀態與變數
@@ -75,7 +75,7 @@
     let bloomIntensity = 0;
     let dustParticles = [];
 
-    //    /**
+    /**
      * 高階純數算 Live2D 渲染引擎
      * 完全不需要圖片，透過貝茲曲線與流體運算即時生成 AAA 級動態角色
      */
@@ -189,7 +189,7 @@
             ctx.restore();
         }
 
-        //        drawBody(ctx) {
+        drawBody(ctx) {
             // 宋代交領衣飾 (絲綢漸層)
             let silkGrad = ctx.createLinearGradient(0, 0, 0, 300);
             silkGrad.addColorStop(0, this.colors.silkBase);
@@ -267,7 +267,7 @@
             ctx.globalCompositeOperation = 'source-over';
         }
 
-        //        drawFeatures(ctx) {
+        drawFeatures(ctx) {
             // 眉毛 (隨情緒改變角度)
             ctx.strokeStyle = '#2a1a10';
             ctx.lineWidth = 2.5;
@@ -376,7 +376,7 @@
             ctx.beginPath(); ctx.arc(0, mouthY + 1.5 + smile*0.5, 1, 0, Math.PI*2); ctx.fill();
         }
 
-        //        drawBackHair(ctx, swayX, swayY, lookDx) {
+        drawBackHair(ctx, swayX, swayY, lookDx) {
             let hGrad = ctx.createLinearGradient(0, -100, 0, 300);
             hGrad.addColorStop(0, this.colors.hairLight);
             hGrad.addColorStop(0.5, this.colors.hairDark);
@@ -451,7 +451,7 @@
             ctx.fill();
         }
 
-        //        drawCinematicLighting(ctx, cx, cy, scale) {
+        drawCinematicLighting(ctx, cx, cy, scale) {
             // 計算滑鼠相對於角色的角度與距離，產生動態光斑
             let dx = mouse.x - cx;
             let dy = mouse.y - cy;
@@ -513,7 +513,9 @@
 
     for(let i=0; i<50; i++) dustParticles.push(new DustParticle());
 
-    //    const originStages = {
+    let player = { knowledgeScore: 50 };
+
+    const originStages = {
         '名門嫡女': {
             character: "太醫 張大人",
             story: [
@@ -544,6 +546,22 @@
         ]
     };
 
+    let floatingTexts = [];
+
+    class FloatingText {
+        constructor(x, y, text, color) {
+            this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.scale = 0.5;
+        }
+        update() { this.y -= 1.2; this.life -= 0.015; this.scale += (1 - this.scale) * 0.2; }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
+            ctx.translate(this.x, this.y); ctx.scale(this.scale, this.scale);
+            ctx.fillStyle = this.color; ctx.font = 'bold 30px "Kaiti", serif';
+            ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; 
+            ctx.textAlign = 'center'; ctx.fillText(this.text, 0, 0); ctx.restore();
+        }
+    }
+
     function applyChoice(opt) {
         player.knowledgeScore += opt.val;
         mainCharacter.setEmotion(opt.expr);
@@ -560,7 +578,7 @@
         currentState = STATES.FEEDBACK;
     }
 
-    //    function drawGlassPanel(ctx, x, y, w, h) {
+    function drawGlassPanel(ctx, x, y, w, h) {
         ctx.save();
         // 玻璃底色
         ctx.fillStyle = 'rgba(10, 12, 18, 0.75)';
@@ -641,7 +659,7 @@
         ctx.restore();
     }
 
-    //    function gameLoop(timestamp) {
+    function gameLoop(timestamp) {
         dt = (timestamp - lastTime) / 1000 || 0;
         lastTime = timestamp;
         time += dt;
@@ -756,7 +774,7 @@
         requestAnimationFrame(gameLoop);
     }
 
-    //    canvas.addEventListener('mousemove', e => {
+    canvas.addEventListener('mousemove', e => {
         const rect = canvas.getBoundingClientRect();
         mouse.targetX = (e.clientX - rect.left) * (canvas.width / rect.width);
         mouse.targetY = (e.clientY - rect.top) * (canvas.height / rect.height);
