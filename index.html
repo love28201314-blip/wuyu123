@@ -39,6 +39,8 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d', { alpha: false }); 
 
+    const FONT_FAMILY = '"Kaiti", "標楷體", "Times New Roman", serif';
+
     let dpr = window.devicePixelRatio || 1;
     let cw = window.innerWidth;
     let ch = window.innerHeight;
@@ -99,7 +101,7 @@
 
     class ProceduralLive2DCharacter {
         constructor(role, customColors = null) {
-            this.role = role; // 'player', 'maid', 'chef', 'doctor', 'medic'
+            this.role = role; 
             this.breathingPhase = Math.random() * Math.PI;
             this.hairPhase = Math.random() * Math.PI;
             this.blinkTimer = Math.random() * 3;
@@ -125,7 +127,7 @@
         }
 
         update(dt) {
-            this.breathingPhase += dt * (this.role === 'chef' ? 1.0 : 1.5); // 總管呼吸較慢
+            this.breathingPhase += dt * (this.role === 'chef' ? 1.0 : 1.5); 
             this.hairPhase += dt * 2.0;
 
             this.blinkTimer -= dt;
@@ -194,30 +196,24 @@
             
             ctx.beginPath();
             if (this.role === 'chef') {
-                // 較為寬碩的身軀
                 ctx.moveTo(-170, 300); ctx.quadraticCurveTo(-120, 80, -40, 80); 
                 ctx.lineTo(40, 80); ctx.quadraticCurveTo(120, 80, 170, 300);
             } else if (this.role === 'doctor') {
-                // 挺拔的官服身軀
                 ctx.moveTo(-140, 300); ctx.lineTo(-90, 80); 
                 ctx.lineTo(90, 80); ctx.lineTo(140, 300);
             } else {
-                // 柔美的女性身軀
                 ctx.moveTo(-130, 300); ctx.quadraticCurveTo(-90, 80, -30, 80); 
                 ctx.lineTo(30, 80); ctx.quadraticCurveTo(90, 80, 130, 300);
             }
             ctx.fill(); ctx.shadowBlur = 0;
 
-            // 衣領細節
             let collarGrad = ctx.createLinearGradient(-50, 80, 50, 150);
             collarGrad.addColorStop(0, '#e6e6e6'); collarGrad.addColorStop(1, '#b3b3b3');
             ctx.fillStyle = collarGrad;
             
             if (this.role === 'doctor') {
-                // 圓領官服
                 ctx.beginPath(); ctx.arc(0, 100, 50, Math.PI, 0); ctx.lineTo(50,120); ctx.lineTo(-50,120); ctx.fill();
             } else {
-                // 交領
                 ctx.beginPath(); ctx.moveTo(-50, 80); ctx.lineTo(0, 140); ctx.lineTo(50, 80); ctx.lineTo(80, 100); ctx.lineTo(0, 200); ctx.lineTo(-80, 100); ctx.fill();
             }
 
@@ -226,7 +222,6 @@
                 ctx.beginPath(); ctx.moveTo(-70, 95); ctx.lineTo(0, 190); ctx.lineTo(70, 95); ctx.stroke();
             }
             
-            // 脖子
             let neckGrad = ctx.createLinearGradient(0, 50, 0, 90);
             neckGrad.addColorStop(0, this.colors.skinShadow); neckGrad.addColorStop(1, this.colors.skinBase);
             ctx.fillStyle = neckGrad;
@@ -250,21 +245,17 @@
             
             ctx.beginPath();
             if (this.role === 'chef') {
-                // 圓潤臉頰
                 ctx.moveTo(0, 70); ctx.bezierCurveTo(60, 60, 75, 0, 65, -40); 
                 ctx.bezierCurveTo(60, -80, -60, -80, -65, -40); ctx.bezierCurveTo(-75, 0, -60, 60, 0, 70);
             } else if (this.role === 'doctor') {
-                // 瘦長臉型
                 ctx.moveTo(0, 65); ctx.bezierCurveTo(40, 50, 50, 0, 45, -40); 
                 ctx.bezierCurveTo(40, -80, -40, -80, -45, -40); ctx.bezierCurveTo(-50, 0, -40, 50, 0, 65);
             } else {
-                // 瓜子臉
                 ctx.moveTo(0, 60); ctx.bezierCurveTo(45, 50, 55, 0, 50, -40); 
                 ctx.bezierCurveTo(45, -80, -45, -80, -50, -40); ctx.bezierCurveTo(-55, 0, -45, 50, 0, 60);
             }
             ctx.fill(); ctx.shadowBlur = 0;
 
-            // 女性角色腮紅
             if (this.role === 'player' || this.role === 'maid' || this.role === 'medic') {
                 ctx.globalCompositeOperation = 'multiply';
                 let blushGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, 20);
@@ -279,14 +270,12 @@
             ctx.strokeStyle = '#2a1a10'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
             let browY = -35; let browA = this.currentEmotion.browAngle * 10;
             
-            // 男生眉毛較粗
             if(this.role === 'doctor' || this.role === 'chef') { ctx.lineWidth = 4; browY = -30; }
 
             ctx.beginPath(); ctx.moveTo(-45, browY - browA); ctx.quadraticCurveTo(-30, browY - 5, -15, browY + browA); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(45, browY - browA); ctx.quadraticCurveTo(30, browY - 5, 15, browY + browA); ctx.stroke();
 
             let eyeY = -10;
-            // 男生眼睛略小
             let eyeMod = (this.role === 'doctor' || this.role === 'chef') ? 0.6 : 1.0;
             let eyeScaleY = this.eyeOpenness * this.currentEmotion.eyeWide * eyeMod;
             
@@ -317,7 +306,6 @@
                 ctx.strokeStyle = '#1a0a05'; ctx.lineWidth = (this.role === 'player' || this.role === 'maid') ? 3.5 : 2;
                 ctx.beginPath(); ctx.moveTo(-18, 2); ctx.quadraticCurveTo(0, -14 * eyeScaleY, 18, 2); ctx.stroke();
                 
-                // 女性眼線
                 if(this.role === 'player' || this.role === 'maid' || this.role === 'medic') {
                     ctx.lineWidth = 1.5;
                     ctx.beginPath(); ctx.moveTo(15, 0); ctx.lineTo(22, -6 * eyeScaleY); ctx.stroke();
@@ -327,10 +315,8 @@
 
             drawEye(-25, eyeY, false); drawEye(25, eyeY, true);
 
-            // 鼻子
             ctx.fillStyle = this.colors.skinShadow; ctx.beginPath(); ctx.arc(0, 15, (this.role==='chef')?3:1.5, 0, Math.PI*2); ctx.fill();
             
-            // 嘴唇
             let mouthY = 35; let smile = this.currentEmotion.smile * 5;
             let lipGrad = ctx.createLinearGradient(0, mouthY-2, 0, mouthY+5);
             lipGrad.addColorStop(0, (this.role==='doctor'||this.role==='chef')?'#a67c7c':'#c75c5c'); 
@@ -340,24 +326,20 @@
             ctx.beginPath(); ctx.moveTo(-10, mouthY - smile*0.5); ctx.quadraticCurveTo(0, mouthY + smile, 10, mouthY - smile*0.5); ctx.quadraticCurveTo(0, mouthY + 3 + smile, -10, mouthY - smile*0.5);
             ctx.fill(); ctx.stroke();
 
-            // === 男生專屬鬍鬚 ===
             if (this.role === 'doctor') {
                 ctx.fillStyle = '#3a3a3a';
-                // 山羊鬍
                 ctx.beginPath(); ctx.moveTo(-15, 45); ctx.quadraticCurveTo(0, 140, 15, 45); ctx.quadraticCurveTo(0, 60, -15, 45); ctx.fill();
-                // 八字鬍
                 ctx.beginPath(); ctx.moveTo(-5, 28); ctx.quadraticCurveTo(-25, 35, -30, 45); ctx.quadraticCurveTo(-15, 30, -5, 28); ctx.fill();
                 ctx.beginPath(); ctx.moveTo(5, 28); ctx.quadraticCurveTo(25, 35, 30, 45); ctx.quadraticCurveTo(15, 30, 5, 28); ctx.fill();
             } else if (this.role === 'chef') {
                 ctx.fillStyle = '#1a100a';
-                // 粗八字鬍
                 ctx.beginPath(); ctx.moveTo(-8, 26); ctx.quadraticCurveTo(-25, 30, -35, 40); ctx.quadraticCurveTo(-15, 38, -8, 30); ctx.fill();
                 ctx.beginPath(); ctx.moveTo(8, 26); ctx.quadraticCurveTo(25, 30, 35, 40); ctx.quadraticCurveTo(15, 38, 8, 30); ctx.fill();
             }
         }
 
         drawBackHair(ctx, swayX, swayY) {
-            if (this.role === 'chef' || this.role === 'doctor') return; // 男生頭髮包在帽子裡
+            if (this.role === 'chef' || this.role === 'doctor') return; 
             
             let hGrad = ctx.createLinearGradient(0, -100, 0, 300);
             hGrad.addColorStop(0, this.colors.hairLight); hGrad.addColorStop(1, '#000000');
@@ -367,11 +349,9 @@
                 ctx.beginPath(); ctx.moveTo(-50, -50); ctx.bezierCurveTo(-100, 50, -120 + swayX, 200, -80 + swayX*1.5, 300 + swayY);
                 ctx.lineTo(80 + swayX*1.5, 300 + swayY); ctx.bezierCurveTo(120 + swayX, 200, 100, 50, 50, -50); ctx.fill();
             } else if (this.role === 'maid') {
-                // 短髮披肩
                 ctx.beginPath(); ctx.moveTo(-40, -50); ctx.bezierCurveTo(-80, 50, -90 + swayX, 120, -70 + swayX, 150 + swayY);
                 ctx.lineTo(70 + swayX, 150 + swayY); ctx.bezierCurveTo(90 + swayX, 120, 80, 50, 40, -50); ctx.fill();
             } else if (this.role === 'medic') {
-                // 盤髮，後方收攏
                 ctx.beginPath(); ctx.arc(0, -30, 50, 0, Math.PI*2); ctx.fill();
             }
         }
@@ -379,30 +359,25 @@
         drawFrontHair(ctx, swayX, swayY) {
             ctx.fillStyle = this.colors.hairDark;
 
-            // === 總管 (廚子帽) ===
             if (this.role === 'chef') {
                 ctx.fillStyle = '#6e523f';
-                ctx.beginPath(); ctx.arc(0, -45, 55, Math.PI, 0); ctx.fill(); // 帽體
-                ctx.fillRect(-55, -45, 110, 20); // 帽簷
-                ctx.fillStyle = '#4a3528'; ctx.fillRect(-55, -30, 110, 5); // 帽帶
+                ctx.beginPath(); ctx.arc(0, -45, 55, Math.PI, 0); ctx.fill(); 
+                ctx.fillRect(-55, -45, 110, 20); 
+                ctx.fillStyle = '#4a3528'; ctx.fillRect(-55, -30, 110, 5); 
                 return;
             }
             
-            // === 太醫 (烏紗帽) ===
             if (this.role === 'doctor') {
                 ctx.fillStyle = '#111';
-                // 官帽主體
                 ctx.fillRect(-45, -90, 90, 60);
                 ctx.beginPath(); ctx.arc(0, -90, 45, Math.PI, 0); ctx.fill();
                 ctx.fillRect(-50, -30, 100, 10);
-                // 官帽兩側展角 (Wing flaps)
                 ctx.fillStyle = '#0a0a0a';
                 ctx.fillRect(-120, -45, 70, 15);
                 ctx.fillRect(50, -45, 70, 15);
                 return;
             }
 
-            // === 女性頭髮基底 ===
             ctx.beginPath(); ctx.arc(0, -50, 60, Math.PI, 0); ctx.fill();
 
             const drawStrand = (sx, sy, c1x, c1y, c2x, c2y, ex, ey, w) => {
@@ -420,7 +395,6 @@
                 drawStrand(-20, -60, -30, -20, -25 + swayX*0.2, 0, -10 + swayX*0.5, 10, 20);
                 drawStrand(0, -60, 10, -20, 15 + swayX*0.2, 0, 25 + swayX*0.5, -5, 25);
                 
-                // 金步搖
                 ctx.strokeStyle = this.colors.goldTrim; ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.moveTo(-50, -40); ctx.lineTo(-70 + swayX*1.5, 10 + swayY*1.5); ctx.stroke();
                 ctx.beginPath(); ctx.moveTo(50, -40); ctx.lineTo(70 + swayX*1.5, 10 + swayY*1.5); ctx.stroke();
@@ -428,29 +402,23 @@
                 ctx.beginPath(); ctx.arc(70 + swayX*1.5, 10 + swayY*1.5, 4, 0, Math.PI*2); ctx.fill();
             } 
             else if (this.role === 'maid') {
-                // 雙丫髻 (Twin Buns)
                 ctx.beginPath(); ctx.arc(-45, -80, 25, 0, Math.PI*2); ctx.fill();
                 ctx.beginPath(); ctx.arc(45, -80, 25, 0, Math.PI*2); ctx.fill();
-                // 紅色緞帶
                 ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 4;
                 ctx.beginPath(); ctx.arc(-45, -80, 25, 0, Math.PI); ctx.stroke();
                 ctx.beginPath(); ctx.arc(45, -80, 25, 0, Math.PI); ctx.stroke();
-                // 瀏海
                 drawStrand(-25, -55, -30, -20, -15, -10, -5, 0, 25);
                 drawStrand(0, -55, 10, -20, 20, -10, 30, -5, 25);
             }
             else if (this.role === 'medic') {
-                // 醫女頭巾 (White/Blue Scarf)
                 ctx.fillStyle = '#d4e6f1';
                 ctx.beginPath(); ctx.arc(0, -60, 58, Math.PI, 0); ctx.fill();
                 ctx.fillRect(-58, -60, 116, 25);
                 ctx.fillStyle = '#a9cce3'; ctx.fillRect(-58, -35, 116, 5);
-                // 旁分瀏海
                 drawStrand(-45, -35, -50, 0, -40 + swayX*0.5, 20, -30 + swayX*0.5, 40, 15);
                 drawStrand(30, -35, 40, 0, 45 + swayX*0.5, 20, 35 + swayX*0.5, 40, 15);
             }
 
-            // 女性髮絲光圈
             if(this.role !== 'medic') {
                 ctx.globalCompositeOperation = 'screen';
                 let haloGrad = ctx.createLinearGradient(0, -70, 0, -40);
@@ -465,8 +433,8 @@
             ctx.globalCompositeOperation = 'screen';
             
             let rimGrad = ctx.createRadialGradient(dx * 0.5, dy * 0.5, 50, 0, 0, 300);
-            rimGrad.addColorStop(0, 'rgba(212, 175, 55, 0.25)'); // 金色主光
-            rimGrad.addColorStop(0.5, 'rgba(100, 150, 255, 0.1)'); // 藍色補光
+            rimGrad.addColorStop(0, 'rgba(212, 175, 55, 0.25)'); 
+            rimGrad.addColorStop(0.5, 'rgba(100, 150, 255, 0.1)'); 
             rimGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
             
             ctx.fillStyle = rimGrad; ctx.fillRect(-200, -200, 400, 500);
@@ -518,7 +486,7 @@
         update() { this.y -= 1.2; this.life -= 0.015; this.scale += (1 - this.scale) * 0.2; }
         draw(ctx) {
             ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y); ctx.scale(this.scale, this.scale);
-            ctx.fillStyle = this.color; ctx.font = 'bold 28px "Kaiti", "標楷體", serif'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; 
+            ctx.fillStyle = this.color; ctx.font = `bold 28px ${FONT_FAMILY}`; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; 
             ctx.textAlign = 'center'; ctx.fillText(this.text, 0, 0); ctx.restore();
         }
     }
@@ -561,7 +529,7 @@
         ctx.restore();
     }
 
-    // 完美自適應斷行系統，回傳需要的總行數
+    // 完美自適應斷行系統
     function wrapText(ctx, text, maxWidth) {
         let words = text.split('');
         let lines = [];
@@ -587,29 +555,10 @@
         return lines;
     }
 
-    function drawCinematicText(ctx, text, x, y, maxWidth, isTitle = false) {
-        ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
-        ctx.fillStyle = isTitle ? '#d4af37' : '#f0f0f0'; 
-        ctx.font = isTitle ? 'bold 24px "Kaiti"' : '20px "Kaiti"';
-        ctx.textBaseline = 'top';
-        
-        let lines = wrapText(ctx, text, maxWidth);
-        let lineHeight = isTitle ? 34 : 30;
-
-        lines.forEach((line, index) => {
-            ctx.fillText(line, x, y + index * lineHeight);
-        });
-        
-        ctx.shadowBlur = 0; ctx.textBaseline = 'alphabetic';
-        return lines.length * lineHeight; // 回傳佔據高度
-    }
-
-    // 左上角：加入主母插圖
     function drawDatePanel(ctx) {
         let panelW = 260; let panelH = 100;
         drawGlassPanel(ctx, 20, 20, panelW, panelH);
         
-        // 主母頭像
         ctx.save();
         ctx.beginPath(); ctx.arc(65, 70, 32, 0, Math.PI * 2); ctx.clip();
         ctx.fillStyle = '#121826'; ctx.fill();
@@ -620,14 +569,13 @@
         ctx.beginPath(); ctx.arc(65, 70, 32, 0, Math.PI*2); ctx.stroke();
 
         ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
-        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 20px "Kaiti"'; ctx.textAlign = 'left'; 
+        ctx.fillStyle = '#d4af37'; ctx.font = `bold 20px ${FONT_FAMILY}`; ctx.textAlign = 'left'; 
         ctx.fillText(`【大宋宣和元年】`, 110, 55);
-        ctx.fillStyle = '#e0e0e0'; ctx.font = '18px "Kaiti"'; 
+        ctx.fillStyle = '#e0e0e0'; ctx.font = `18px ${FONT_FAMILY}`; 
         ctx.fillText(`產後第 ${currentDay} 天`, 120, 85);
         ctx.shadowBlur = 0;
     }
 
-    // 右上角：加大頭像
     function drawStatsPanel(ctx) {
         let panelW = 340; let panelX = Math.max(20, cw - panelW - 20);
         let panelY = 20; let panelH = 320;
@@ -635,7 +583,7 @@
         drawGlassPanel(ctx, panelX, panelY, panelW, panelH);
         
         ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
-        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 22px "Kaiti"'; ctx.textAlign = 'left';
+        ctx.fillStyle = '#d4af37'; ctx.font = `bold 22px ${FONT_FAMILY}`; ctx.textAlign = 'left';
         ctx.fillText("【後宅人際關係】", panelX + 20, panelY + 35); ctx.shadowBlur = 0;
 
         let startY = panelY + 80;
@@ -655,7 +603,6 @@
                 ctx.save();
                 ctx.beginPath(); ctx.arc(panelX + 45, startY - 5, 26, 0, Math.PI * 2); ctx.clip();
                 ctx.fillStyle = '#1a1f2e'; ctx.fill();
-                // 放大 NPC 頭像
                 npc.draw(ctx, panelX + 45, startY + 12, 0.35, true);
                 ctx.restore();
                 
@@ -663,9 +610,9 @@
                 ctx.beginPath(); ctx.arc(panelX + 45, startY - 5, 26, 0, Math.PI*2); ctx.stroke();
             }
 
-            ctx.fillStyle = '#fff'; ctx.font = '18px "Kaiti"'; ctx.textAlign = 'left'; 
+            ctx.fillStyle = '#fff'; ctx.font = `18px ${FONT_FAMILY}`; ctx.textAlign = 'left'; 
             ctx.fillText(`${stat.name}`, panelX + 85, startY - 12);
-            ctx.fillStyle = statusColor; ctx.textAlign = 'right'; ctx.font = '16px "Kaiti"'; 
+            ctx.fillStyle = statusColor; ctx.textAlign = 'right'; ctx.font = `16px ${FONT_FAMILY}`; 
             ctx.fillText(`[${stat.status}]`, panelX + panelW - 20, startY - 12);
             
             ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.roundRect(panelX + 85, startY + 5, panelW - 105, 8, 4); ctx.fill();
@@ -678,7 +625,6 @@
         }
     }
 
-    // 完美自適應按鈕斷行
     function drawButton(ctx, id, btn, text) {
         let hover = (mouse.x >= btn.x && mouse.x <= btn.x + btn.w && mouse.y >= btn.y && mouse.y <= btn.y + btn.h);
         ctx.save();
@@ -692,7 +638,7 @@
         ctx.fillStyle = bgGrad; ctx.beginPath(); ctx.roundRect(btn.x, btn.y, btn.w, btn.h, 6); ctx.fill();
         ctx.strokeStyle = hover ? '#fff' : '#d4af37'; ctx.lineWidth = hover ? 2 : 1; ctx.stroke();
         
-        ctx.fillStyle = hover ? '#fff' : '#d4af37'; ctx.font = '20px "Kaiti"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = hover ? '#fff' : '#d4af37'; ctx.font = `20px ${FONT_FAMILY}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         
         let lines = wrapText(ctx, text, btn.w - 30);
         let startY = btn.y + btn.h/2 - ((lines.length - 1) * 12);
@@ -702,6 +648,84 @@
 
         ctx.restore();
         clickZones.push({ id: id, ...btn });
+    }
+
+    // 完美自適應對話框與獨立名牌系統
+    function renderDialog(ctx, titleText, contentText, options = null) {
+        let padding = 30;
+        let boxW = Math.min(800, cw - 40);
+        let boxX = cw / 2 - boxW / 2;
+
+        ctx.font = `22px ${FONT_FAMILY}`;
+        let contentLines = wrapText(ctx, contentText, boxW - padding * 2);
+        let contentH = contentLines.length * 34;
+
+        let btnHs = [];
+        let totalBtnH = 0;
+        if (options) {
+            ctx.font = `20px ${FONT_FAMILY}`;
+            btnHs = options.map(opt => wrapText(ctx, opt.text, boxW - padding * 2 - 30).length * 24 + 30);
+            totalBtnH = btnHs.reduce((a,b)=>a+b, 0) + (options.length) * 15;
+        }
+
+        let boxH = padding * 2 + contentH + (options ? totalBtnH + 10 : 30);
+        let boxY = ch - boxH - 20;
+
+        drawGlassPanel(ctx, boxX, boxY, boxW, boxH);
+
+        // 獨立立體名牌 (Nameplate)
+        if (titleText) {
+            ctx.save();
+            ctx.font = `bold 22px ${FONT_FAMILY}`;
+            let titleW = ctx.measureText(titleText).width + 50;
+            let titleH = 40;
+            let titleX = boxX + 20;
+            let titleY = boxY - titleH / 2; 
+
+            ctx.fillStyle = 'rgba(212, 175, 55, 0.95)';
+            ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 6;
+            ctx.beginPath(); ctx.roundRect(titleX, titleY, titleW, titleH, 6); ctx.fill();
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#05070a';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(titleText, titleX + titleW / 2, titleY + titleH / 2);
+            ctx.restore();
+        }
+
+        ctx.fillStyle = '#f0f0f0';
+        ctx.font = `22px ${FONT_FAMILY}`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
+        
+        let currY = boxY + padding;
+        contentLines.forEach(line => {
+            if(line.includes("【")) ctx.fillStyle = '#d4af37';
+            else ctx.fillStyle = '#f0f0f0';
+            ctx.fillText(line, boxX + padding, currY);
+            currY += 34;
+        });
+        ctx.shadowBlur = 0;
+
+        if (options) {
+            currY += 10;
+            let btnW = boxW - padding * 2;
+            let btnX = boxX + padding;
+            options.forEach((opt, idx) => {
+                let h = btnHs[idx];
+                drawButton(ctx, `opt_${idx}`, {x: btnX, y: currY, w: btnW, h: h}, opt.text);
+                currY += h + 15;
+            });
+        } else {
+            ctx.globalAlpha = (Math.sin(time * 5) + 1) * 0.5;
+            ctx.fillStyle = '#d4af37'; ctx.textAlign = 'right'; ctx.font = `bold 18px ${FONT_FAMILY}`; 
+            ctx.textBaseline = 'bottom';
+            ctx.fillText("▼ 點擊繼續", boxX + boxW - 20, boxY + boxH - 15);
+            ctx.globalAlpha = 1.0;
+            clickZones.push({ id: 'screen_next', x: 0, y: 0, w: cw, h: ch });
+        }
     }
 
     function gameLoop(timestamp) {
@@ -718,7 +742,6 @@
         ctx.scale(dpr, dpr); 
         ctx.translate(cameraShake.x, cameraShake.y);
 
-        // 1. 滿版無縫背景
         let bgGrad = ctx.createRadialGradient(cw/2, ch/2, 100, cw/2, ch/2, Math.max(cw, ch));
         bgGrad.addColorStop(0, '#151b29'); bgGrad.addColorStop(1, '#05070a');
         ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, cw, ch);
@@ -727,11 +750,9 @@
         dustParticles.forEach(p => { p.update(dt); p.draw(ctx); });
         ctx.globalCompositeOperation = 'source-over';
 
-        // 2. 更新所有角色
         mainCharacter.update(dt);
         Object.values(npcs).forEach(npc => npc.update(dt));
         
-        // 自動切換當前對話角色
         let activeCharacter = mainCharacter;
         if (currentState === STATES.STORY || currentState === STATES.QUESTION || currentState === STATES.FEEDBACK) {
             let stage = currentStage || introStage;
@@ -742,95 +763,39 @@
             else if (charName.includes("蘇氏") || charName.includes("醫女")) activeCharacter = npcs.medic;
         }
 
-        // 動態立繪尺寸 (在手機縮小，電腦放大)
         let charScale = Math.max(1.0, Math.min(cw/600, ch/800) * 2.2);
         activeCharacter.draw(ctx, cw/2, ch/2 + 100, charScale);
 
-        // 3. UI 響應式渲染
         clickZones = [];
         canvas.style.cursor = 'crosshair'; 
         
-        let boxW = Math.min(800, cw - 40);
-        let boxX = cw / 2 - boxW / 2;
-
         if (currentState === STATES.START) {
             ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,cw,ch);
             ctx.textAlign = 'center'; ctx.shadowColor = '#d4af37'; ctx.shadowBlur = 20;
             ctx.fillStyle = '#fff'; 
             let titleSize = Math.max(30, Math.min(60, cw * 0.08));
-            ctx.font = `bold ${titleSize}px "Kaiti"`; ctx.fillText("汴京娘子調養記", cw/2, ch/2 - 100); ctx.shadowBlur = 0;
-            ctx.fillStyle = '#d4af37'; ctx.font = `${titleSize*0.45}px "Kaiti"`; ctx.fillText("— 獨立角色極限渲染版 —", cw/2, ch/2 - 40);
+            ctx.font = `bold ${titleSize}px ${FONT_FAMILY}`; ctx.fillText("汴京娘子調養記", cw/2, ch/2 - 100); ctx.shadowBlur = 0;
+            ctx.fillStyle = '#d4af37'; ctx.font = `${titleSize*0.45}px ${FONT_FAMILY}`; ctx.fillText("— 獨立角色極限渲染版 —", cw/2, ch/2 - 40);
             drawButton(ctx, 'btn_start', {x: cw/2 - 100, y: ch/2 + 80, w: 200, h: 60}, "進入侯府");
         }
         else if (currentState === STATES.STORY) {
             drawDatePanel(ctx); drawStatsPanel(ctx);
-            let stage = currentStage || introStage; let text = stage.story[currentStoryLine];
-            
-            // 動態計算對話框高度
-            ctx.font = '20px "Kaiti"';
-            let requiredH = wrapText(ctx, text, boxW - 50).length * 30 + 100;
-            let boxH = Math.max(180, requiredH);
-            let boxY = ch - boxH - 30;
-
-            drawGlassPanel(ctx, boxX, boxY, boxW, boxH);
-            let yOffset = drawCinematicText(ctx, `【${stage.character}】`, boxX + 25, boxY + 30, boxW - 50, true);
-            drawCinematicText(ctx, text, boxX + 25, boxY + 30 + yOffset, boxW - 50);
-            
-            ctx.globalAlpha = (Math.sin(time * 5) + 1) * 0.5;
-            ctx.fillStyle = '#d4af37'; ctx.textAlign = 'right'; ctx.font = 'bold 16px "Kaiti"'; 
-            ctx.fillText("▼ 點擊繼續", boxX + boxW - 20, boxY + boxH - 20);
-            ctx.globalAlpha = 1.0;
-            clickZones.push({ id: 'screen_next', x: 0, y: 0, w: cw, h: ch }); 
+            let stage = currentStage || introStage;
+            renderDialog(ctx, stage.character, stage.story[currentStoryLine], null);
         }
         else if (currentState === STATES.QUESTION) {
             drawDatePanel(ctx); drawStatsPanel(ctx);
             let stage = currentStage || introStage;
-            
-            // 計算題目高度
-            ctx.font = 'bold 24px "Kaiti"';
-            let titleH = wrapText(ctx, stage.question, boxW - 50).length * 34 + 60;
-            
-            // 計算每個按鈕高度
-            ctx.font = '20px "Kaiti"';
-            let btnHs = stage.options.map(opt => wrapText(ctx, opt.text, boxW - 70).length * 24 + 30);
-            let totalBtnH = btnHs.reduce((a,b)=>a+b, 0) + 40; // 間距
-            
-            let boxY = ch - titleH - totalBtnH - 40;
-            drawGlassPanel(ctx, boxX, boxY, boxW, titleH + totalBtnH + 20);
-            
-            drawCinematicText(ctx, stage.question, boxX + 25, boxY + 30, boxW - 50, true);
-            
-            let currentBtnY = boxY + titleH;
-            let btnW = boxW - 40; let btnX = boxX + 20;
-            
-            stage.options.forEach((opt, idx) => {
-                let h = btnHs[idx];
-                drawButton(ctx, `opt_${idx}`, {x: btnX, y: currentBtnY, w: btnW, h: h}, opt.text);
-                currentBtnY += h + 15;
-            });
+            renderDialog(ctx, stage.character || "請夫人定奪", stage.question, stage.options);
         }
         else if (currentState === STATES.FEEDBACK) {
             drawDatePanel(ctx); drawStatsPanel(ctx);
-            
-            ctx.font = '20px "Kaiti"';
-            let requiredH = wrapText(ctx, selectedOptionFeedback, boxW - 50).length * 30 + 100;
-            let boxH = Math.max(180, requiredH);
-            let boxY = ch - boxH - 30;
-
-            drawGlassPanel(ctx, boxX, boxY, boxW, boxH);
-            let yOffset = drawCinematicText(ctx, "【調理結果】", boxX + 25, boxY + 30, boxW - 50, true);
-            drawCinematicText(ctx, selectedOptionFeedback, boxX + 25, boxY + 30 + yOffset, boxW - 50);
-            
-            ctx.globalAlpha = (Math.sin(time * 5) + 1) * 0.5;
-            ctx.fillStyle = '#d4af37'; ctx.textAlign = 'right'; ctx.font = 'bold 16px "Kaiti"'; 
-            ctx.fillText("▼ 點擊繼續", boxX + boxW - 20, boxY + boxH - 20);
-            ctx.globalAlpha = 1.0;
-            clickZones.push({ id: 'screen_next', x: 0, y: 0, w: cw, h: ch });
+            renderDialog(ctx, "調理結果", selectedOptionFeedback, null);
         }
         else if (currentState === STATES.END) {
             ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0,0,cw,ch);
-            ctx.textAlign = 'center'; ctx.fillStyle = '#d4af37'; ctx.font = 'bold 46px "Kaiti"'; ctx.fillText("體驗結束", cw/2, ch/2 - 100);
-            ctx.fillStyle = '#fff'; ctx.font = '24px "Kaiti"'; ctx.fillText(`最終知識分數: ${player.knowledgeScore}`, cw/2, ch/2 - 30);
+            ctx.textAlign = 'center'; ctx.fillStyle = '#d4af37'; ctx.font = `bold 46px ${FONT_FAMILY}`; ctx.fillText("體驗結束", cw/2, ch/2 - 100);
+            ctx.fillStyle = '#fff'; ctx.font = `24px ${FONT_FAMILY}`; ctx.fillText(`最終知識分數: ${player.knowledgeScore}`, cw/2, ch/2 - 30);
             drawButton(ctx, 'btn_restart', {x: cw/2 - 100, y: ch/2 + 60, w: 200, h: 60}, "重新體驗");
         }
 
@@ -845,7 +810,6 @@
         requestAnimationFrame(gameLoop);
     }
 
-    // 互動處理
     function handleInteraction(cx, cy) {
         let clicked = clickZones.find(z => cx >= z.x && cx <= z.x + z.w && cy >= z.y && cy <= z.y + z.h);
         
