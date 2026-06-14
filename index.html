@@ -31,7 +31,7 @@
 
 <script>
     // ==========================================
-    // 1. 音效引擎 (修復瀏覽器 Autoplay 阻擋)
+    // 1. 音效引擎 (Web Audio API)
     // ==========================================
     let audioCtx = null;
     const SE = {
@@ -84,12 +84,15 @@
     let mouse = {x: -100, y: -100}, lastHover = null, currentExpr = 'normal', shake = 0, flash = {a: 0, c: '#fff'};
     let pts = [], fTexts = [], sfxs = [], bgCvs = {};
     let isEarlyEnd = false, earlyEndChar = "", endScenes = [], endIdx = 0, eTitle = "", eColor = "", eType = "normal";
+    
+    // 全域宣告天氣粒子，修正 ReferenceError
+    let snowflakes = [], raindrops = [], petals = [];
 
-    const NList = ['盛明蘭','沈珍珠','王語嫣','趙盼兒','李清照'], BList = ['名門嫡女','書香世家','富商巨賈'];
-    let selN = 0, selB = 0;
+    const NList = ['盛明蘭','沈珍珠','王語嫣','趙盼兒','李清照'], FList = ['f1','f2','f3'], CList = ['c1','c2','c3'], BList = ['名門嫡女','書香世家','富商巨賈'];
+    let selN = 0, selF = 0, selC = 0, selB = 0;
     
     let P = {
-        name: "主母", origin: "名門嫡女", score: 50, 
+        name: "主母", origin: "名門嫡女", id: "player_f1_c1", score: 50, 
         aff: {
             maid: {n:"丫鬟 春桃", c:50, t:50, m:100, col:"#e8b4b8", s:"平淡"}, 
             chef: {n:"膳房 總管", c:50, t:50, m:100, col:"#8c7a6b", s:"平淡"},
@@ -111,7 +114,7 @@
     // ==========================================
     // 3. 衛教題庫與劇情
     // ==========================================
-    const introStage = {type: "quiz", char: "醫女 蘇氏", q: "【起始抉擇】望著孩兒，您在心中暗暗定下規矩：",
+    const introStage = {type: "quiz", img: "medic", char: "醫女 蘇氏", q: "【起始抉擇】望著孩兒，您在心中暗暗定下規矩：",
         s: [
             "【大宋汴京 · 侯府內宅】\n我是這座侯府的主母。昨日歷經千辛萬苦，終於平安誕下了小少爺。", 
             "「初為人母，事事皆新。我定要好好學習調養與育兒技巧，照顧好少爺，也保重自己的鳳體。」", 
@@ -125,21 +128,21 @@
     };
         
     const originStages = {
-        '名門嫡女': {type: "quiz", char: "太醫 張大人", q: "【嫡女專屬支線】面對老夫人的賞賜與太醫的勸告，您該如何應對？",
+        '名門嫡女': {type: "quiz", img: "doctor", char: "太醫 張大人", q: "【嫡女專屬支線】面對老夫人的賞賜與太醫的勸告，您該如何應對？",
             s: ["老夫人派人送來了極其珍貴的『千年人參湯』，指名要給我補身子。","太醫張大人：「夫人！這千年人參雖是大補，但對產婦而言，卻是退奶的大忌啊！」\n\n【衛教小知識】：人參、韭菜、麥芽水等都是常見的退奶食物，哺乳期應避開。"],
             opts: [
                 {t: "婉拒並請太醫作證人參會退奶，改請老夫人賜黑豆豬腳湯。", fb: "【太醫 撫鬚】夫人睿智！既保全了老夫人的顏面，又守住了小少爺的糧倉。", af: [{c: 'doctor', v: 30, s: '欣慰'}], h: 30, ex: 'happy'},
                 {t: "為了面子硬著頭皮喝下去，反正千年人參難得一見。", fb: "【太醫 擔憂】這...夫人，您喝了之後當晚奶水疏少，小少爺吸吮得較為費力，下次可得留心了。", af: [{c: 'doctor', v: -25, s: '擔憂'}], h: -25, ex: 'shocked'},
                 {t: "有些不知所措，不知道該聽誰的，內心感到焦慮。", fb: "【太醫 溫言勸阻】夫人莫慌，這參湯咱們婉言推辭即可，有微臣與醫女在，定能替您妥善調養。", af: [{c: 'doctor', v: -15, s: '擔憂'}], h: -15, ex: 'shocked'}
             ]},
-        '書香世家': {type: "quiz", char: "醫女 蘇氏", q: "【書香專屬支線】面對夫君引經據典的偏方，您該如何抉擇？",
+        '書香世家': {type: "quiz", img: "medic", char: "醫女 蘇氏", q: "【書香專屬支線】面對夫君引經據典的偏方，您該如何抉擇？",
             s: ["夫君翻閱古籍，找來了一帖『通草麥芽飲』，說是書上記載能助產婦通暢氣血。","蘇醫女：「夫人，這通草雖通乳，但『麥芽』卻是實打實的退奶藥啊！」\n\n【衛教小知識】：大麥芽常被用來退奶，若要發奶，應多攝取水分與優質蛋白質如魚湯。"],
             opts: [
                 {t: "微笑指出古籍中麥芽實為『退奶』之用，請夫君改查『魚湯發奶』之法。", fb: "【蘇醫女 欣慰】夫人學識淵博！夫君聽後也恍然大悟，立刻命人去廚房熬煮鮮魚湯了。", af: [{c: 'medic', v: 30, s: '崇敬'}], h: 30, ex: 'happy'},
                 {t: "盲目相信古籍與夫君，喝了之後發現乳房乾癟。", fb: "【蘇醫女 擔憂】哎...古籍也有未臻完善之處。您喝了之後奶水大減，先別急，多喝溫水與親餵還來得及補救。", af: [{c: 'medic', v: -25, s: '擔憂'}], h: -25, ex: 'shocked'},
                 {t: "內心焦躁，覺得身邊的人都給錯建議，不知如何是好。", fb: "【蘇醫女 柔聲安撫】夫人息怒，夫君也是愛子心切。咱們不喝這飲子便是，喝杯熱水寬寬心。", af: [{c: 'medic', v: -15, s: '關切'}], h: -15, ex: 'shocked'}
             ]},
-        '富商巨賈': {type: "quiz", char: "膳房 總管", q: "【富商專屬支線】面對娘家的安排，您該如何抉擇？",
+        '富商巨賈': {type: "quiz", img: "chef", char: "膳房 總管", q: "【富商專屬支線】面對娘家的安排，您該如何抉擇？",
             s: ["娘家送來了重金聘請的三位『西域奶娘』，勸我別親自餵奶了，以免壞了身段。","膳房總管：「夫人，娘家老爺說了，您只要專心吃燕窩享福就好！」\n\n【衛教小知識】：母乳含有無法取代的抗體。且若不親餵，產婦自身也易漲奶發炎。"],
             opts: [
                 {t: "留下奶娘幫忙洗澡，但堅持『親自哺餵』給寶寶最好的抗體。", fb: "【總管 敬佩】夫人真是慈母！既享受了人手伺候，又親自給了小少爺最珍貴的母乳抗體！", af: [{c: 'chef', v: 30, s: '死心塌地'},{c: 'medic', v: 20, s: '崇敬'}], h: 30, ex: 'happy'},
@@ -150,44 +153,44 @@
     
     let QPool = {
         'maid': [
-            {char: "丫鬟 春桃", q: "【初乳迷思】面對春桃的疑慮，夫人該如何回應？", s: ["春桃：「夫人...這初乳又黃又濃，而且量這麼少，這怎麼夠小少爺塞牙縫呀？」\n\n【衛教小知識】：初乳量雖少，但富含抗體。新生兒胃第一天僅有彈珠大小，少量初乳絕對足夠。"],
-             opts: [{t: "初乳是抗體精華，新生兒胃只有彈珠大，這點量足夠了。", fb: "【春桃 恍然大悟】原來如此！這初乳竟是給小少爺最好的保護，奴婢受教了！", af: [{c: 'maid', v: 25, s: '崇拜'}], h: 25, ex: 'happy'},
-                   {t: "妳說得對，奶水確實太少了，快去熬點濃米湯來給少爺墊墊肚子。", fb: "【春桃 慌張】可是...蘇醫女說新生兒腸胃弱不能喝米湯，這法子好像不太安全呢。", af: [{c: 'maid', v: -15, s: '擔憂'}], h: -15, ex: 'shocked'},
-                   {t: "聽得心煩意亂，有些自責是不是自己身體不好。", fb: "【春桃 趕忙安慰】夫人快別這麼說！您千萬別焦慮，奴婢這就去請教蘇醫女，您好好放鬆身心。", af: [{c: 'maid', v: -10, s: '關切'}], h: -10, ex: 'shocked'}]},
-            {char: "丫鬟 春桃", q: "【飽足判斷】判斷寶寶有沒有吃飽，最客觀科學的指標是？", s: ["春桃：「夫人，母奶看起來好稀，小主子喝母乳是不是很容易餓，真的有吃飽嗎？」\n\n【衛教小知識】：判斷吃飽最客觀的指標是尿布量。出生第四天後，一天若有6片以上沉甸甸的濕尿布即代表進食充足。"],
-             opts: [{t: "觀察尿布。一天有 6 片以上沉甸甸濕尿布便是有吃飽了。", fb: "【春桃 恍然大悟】原來如此！看尿量最準確，奴婢這就去拿小本子記尿布！", af: [{c: 'maid', v: 25, s: '崇拜'}], h: 25, ex: 'happy'},
-                   {t: "只要他一哭就是沒吃飽，立刻給他補大碗配方奶！", fb: "【春桃 擔憂】夫人...小少爺哭有時只是想要討抱，過度補奶反而會讓您的母乳分泌變少喔。", af: [{c: 'maid', v: -15, s: '擔憂'}], h: -15, ex: 'shocked'},
-                   {t: "感到很沮喪，開始懷疑自己的奶水沒有營養。", fb: "【春桃 輕聲安慰】夫人千萬別灰心！蘇醫女說親餵的量絕對足夠，我們看尿布和體重最準，您別給自己太大壓力。", af: [{c: 'maid', v: -10, s: '關切'}], h: -10, ex: 'shocked'}]}
+            {img:"maid", char:"丫鬟 春桃", q:"【初乳迷思】面對春桃的疑慮，夫人該如何回應？", s:["春桃：「夫人...這初乳又黃又濃，而且量這麼少，這怎麼夠小少爺塞牙縫呀？」\n\n【衛教小知識】：初乳量雖少，但富含抗體。新生兒胃第一天僅有彈珠大小，少量初乳絕對足夠。"],
+             opts:[{t:"初乳是抗體精華，新生兒胃只有彈珠大，這點量足夠了。", fb:"【春桃 恍然大悟】原來如此！這初乳竟是給小少爺最好的保護，奴婢受教了！", af:[{c:'maid',v:25,s:'崇拜'}], h:25, ex:'happy'},
+                   {t:"妳說得對，奶水確實太少了，快去熬點濃米湯來給少爺墊墊肚子。", fb:"【春桃 慌張】可是...蘇醫女說新生兒腸胃弱不能喝米湯，這法子好像不太安全呢。", af:[{c:'maid',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
+                   {t:"聽得心煩意亂，有些自責是不是自己身體不好。", fb:"【春桃 趕忙安慰】夫人快別這麼說！您千萬別焦慮，奴婢這就去請教蘇醫女，您好好放鬆身心。", af:[{c:'maid',v:-10,s:'關切'}], h:-10, ex:'shocked'}]},
+            {img:"maid", char:"丫鬟 春桃", q:"【飽足判斷】判斷寶寶有沒有吃飽，最客觀科學的指標是？", s:["春桃：「夫人，母奶看起來好稀，小主子喝母乳是不是很容易餓，真的有吃飽嗎？」\n\n【衛教小知識】：判斷吃飽最客觀的指標是尿布量。出生第四天後，一天若有6片以上沉甸甸的濕尿布即代表進食充足。"],
+             opts:[{t:"觀察尿布。一天有 6 片以上沉甸甸濕尿布便是有吃飽了。", fb:"【春桃 恍然大悟】原來如此！看尿量最準確，奴婢這就去拿小本子記尿布！", af:[{c:'maid',v:25,s:'崇拜'}], h:25, ex:'happy'},
+                   {t:"只要他一哭就是沒吃飽，立刻給他補大碗配方奶！", fb:"【春桃 擔憂】夫人...小少爺哭有時只是想要討抱，過度補奶反而會讓您的母乳分泌變少喔。", af:[{c:'maid',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
+                   {t:"感到很沮喪，開始懷疑自己的奶水沒有營養。", fb:"【春桃 輕聲安慰】夫人千萬別灰心！蘇醫女說親餵的量絕對足夠，我們看尿布和體重最準，您別給自己太大壓力。", af:[{c:'maid',v:-10,s:'關切'}], h:-10, ex:'shocked'}]}
         ],
         'chef': [
-            {char: "膳房 總管", q: "【發奶飲食】為了順暢發奶且不塞奶，夫人該如何選擇？", s: ["總管：「夫人！這十全大補麻油豬腳湯上面浮著厚油，最是滋補發奶！」\n\n【衛教小知識】：產後發奶應多攝取水分與清淡蛋白質。過於油膩的濃湯易導致乳汁脂肪過高，反易造成乳腺阻塞。"],
-             opts: [{t: "請廚房撇去浮油，平日多喝清淡的魚湯與水分，攝取優質蛋白質。", fb: "【總管 敬佩】清淡的高蛋白湯水好吸收又發奶，夫人真是深諳養生之道！", af: [{c: 'chef', v: 25, s: '死心塌地'}], h: 25, ex: 'happy'},
-                   {t: "為了多產點奶，硬著頭皮把這整鍋油膩膩的濃湯連油帶肉喝光。", fb: "【總管 擔憂】這...夫人，太過油膩容易讓乳汁脂肪過高，反倒容易塞奶變成石頭奶，這可辛苦您了。", af: [{c: 'chef', v: -15, s: '擔憂'}], h: -15, ex: 'shocked'},
-                   {t: "覺得胃口全無，什麼進補的湯水都不想喝，打算空腹一整天。", fb: "【總管 慌忙規勸】夫人不愛吃油膩的奴才明白，但產後身子虛可不能不吃東西，奴才這就去熬一碗清淡的鮮魚湯來。", af: [{c: 'chef', v: -10, s: '惶恐'}], h: -10, ex: 'shocked'}]},
-            {char: "膳房 總管", q: "【退奶地雷】看到這份點心，身為親餵媽媽的您該如何指示？", s: ["總管：「夫人，這是奴才特別為您準備的『韭菜炒雞蛋』配『人參溫補茶』！」\n\n【衛教小知識】：哺乳期應避開退奶三大地雷食物：人參、韭菜、大麥芽水。"],
-             opts: [{t: "婉拒這兩樣食材，告知人參和韭菜容易退奶，請總管換成溫熱黑豆水。", fb: "【總管 驚出一身冷汗】哎呀！竟不知這兩樣是退奶大忌！多虧夫人博學，奴才這就去換黑豆水！", af: [{c: 'chef', v: 25, s: '敬佩'}], h: 25, ex: 'happy'},
-                   {t: "不疑有他，這都是高級食材，全部吃光光補身體。", fb: "【總管 困惑】奇怪...夫人吃完後，怎麼晚上的奶水量明顯變少了？小少爺看來沒吃飽呢。", af: [{c: 'chef', v: -20, s: '擔憂'}], h: -20, ex: 'shocked'},
-                   {t: "感到極度無奈與疲憊，不知道該怎麼跟膳房溝通，內心十分沮喪。", fb: "【總管 柔聲寬慰】夫人莫要憂心，產後身心勞累奴才都明白。您先歇著，奴才去請教蘇醫女正確的月子膳食，一定讓您吃得舒心。", af: [{c: 'chef', v: -10, s: '惶恐'}], h: -10, ex: 'shocked'}]}
+            {img:"chef", char:"膳房 總管", q:"【發奶飲食】為了順暢發奶且不塞奶，夫人該如何選擇？", s:["總管：「夫人！這十全大補麻油豬腳湯上面浮著厚油，最是滋補發奶！」\n\n【衛教小知識】：產後發奶應多攝取水分與清淡蛋白質。過於油膩的濃湯易導致乳汁脂肪過高，反易造成乳腺阻塞。"],
+             opts:[{t:"請廚房撇去浮油，平日多喝清淡的魚湯與水分，攝取優質蛋白質。", fb:"【總管 敬佩】清淡的高蛋白湯水好吸收又發奶，夫人真是深諳養生之道！", af:[{c:'chef',v:25,s:'死心塌地'}], h:25, ex:'happy'},
+                   {t:"為了多產點奶，硬著頭皮把這整鍋油膩膩的濃湯連油帶肉喝光。", fb:"【總管 擔憂】這...夫人，太過油膩容易讓乳汁脂肪過高，反倒容易塞奶變成石頭奶，這可辛苦您了。", af:[{c:'chef',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
+                   {t:"覺得胃口全無，什麼進補的湯水都不想喝，打算空腹一整天。", fb:"【總管 慌忙規勸】夫人不愛吃油膩的奴才明白，但產後身子虛可不能不吃東西，奴才這就去熬一碗清淡的鮮魚湯來。", af:[{c:'chef',v:-10,s:'惶恐'}], h:-10, ex:'shocked'}]},
+            {img:"chef", char:"膳房 總管", q:"【退奶地雷】看到這份點心，身為親餵媽媽的您該如何指示？", s:["總管：「夫人，這是奴才特別為您準備的『韭菜炒雞蛋』配『人參溫補茶』！」\n\n【衛教小知識】：哺乳期應避開退奶三大地雷食物：人參、韭菜、大麥芽水。"],
+             opts:[{t:"婉拒這兩樣食材，告知人參和韭菜容易退奶，請總管換成溫熱黑豆水。", fb:"【總管 驚出一身冷汗】哎呀！竟不知這兩樣是退奶大忌！多虧夫人博學，奴才這就去換黑豆水！", af:[{c:'chef',v:25,s:'敬佩'}], h:25, ex:'happy'},
+                   {t:"不疑有他，這都是高級食材，全部吃光光補身體。", fb:"【總管 困惑】奇怪...夫人吃完後，怎麼晚上的奶水量明顯變少了？小少爺看來沒吃飽呢。", af:[{c:'chef',v:-20,s:'擔憂'}], h:-20, ex:'shocked'},
+                   {t:"感到極度無奈與疲憊，不知道該怎麼跟膳房溝通，內心十分沮喪。", fb:"【總管 柔聲寬慰】夫人莫要憂心，產後身心勞累奴才都明白。您先歇著，奴才去請教蘇醫女正確的月子膳食，一定讓您吃得舒心。", af:[{c:'chef',v:-10,s:'惶恐'}], h:-10, ex:'shocked'}]}
         ],
         'doctor': [
-            {char: "太醫 張大人", q: "【含乳姿勢】為避免乳頭破損，正確的含乳姿勢應該是？", s: ["張太醫：「夫人，小主子若含乳姿勢不對，只含住乳頭會導致微血管破損流血。」\n\n【衛教小知識】：正確含乳應讓寶寶嘴巴張大，含住「大部分的乳暈」，下巴貼緊乳房，才能有效吸吮且保護皮膚。"],
-             opts: [{t: "讓寶寶嘴巴張大，下巴緊貼乳房，含住大部分的乳暈吸吮。", fb: "【太醫 點頭稱是】夫人處理得非常得當！大口含住乳暈才能正確擠壓乳腺，親餵才不會痛！", af: [{c: 'doctor', v: 25, s: '欣慰'}], h: 25, ex: 'happy'},
-                   {t: "做母親的忍一忍就過去了，只要寶寶含住乳頭最前端用力吸就好。", fb: "【太醫 搖頭嘆息】萬萬不可強忍！只含乳頭不僅吸不到奶，而且很快就會導致嚴重破損與發炎啊。", af: [{c: 'doctor', v: -15, s: '擔憂'}], h: -15, ex: 'shocked'},
-                   {t: "破損太痛了，內心感到恐懼，決定徹底放棄哺乳改餵水。", fb: "【太醫 柔聲規勸】夫人莫怕，親餵初期的確是個考驗。破損處塗抹少許母乳便能天然修復，微臣這就讓醫女來協助您調整姿勢，切莫沮喪。", af: [{c: 'doctor', v: -10, s: '關切'}], h: -10, ex: 'shocked'}]},
-            {char: "太醫 張大人", q: "【夜間猛長期】面對猛長期的頻繁夜奶，您該如何調適？", s: ["半夜，小少爺頻繁討奶。太醫勸您喝濃茶提神撐著餵。\n\n【衛教小知識】：猛長期需配合寶寶頻繁躺餵。切勿飲用濃茶（咖啡因會影響寶寶睡眠）。"],
-             opts: [{t: "斥退濃茶，明白這是猛長期，採用躺餵並同步補眠。", fb: "【眾人 嘆服】夫人明智！躺餵並同步補眠，才是親餵長久之計！", af: [{c: 'doctor', v: 20, s: '欣慰'},{c: 'maid', v: 10, s: '安心'}], h: 25, ex: 'happy'},
-                   {t: "喝下濃茶，強撐著疲憊的身軀坐直餵奶一整夜。", fb: "【太醫 驚呼】濃茶咖啡因會影響寶寶，且您嚴重剝奪睡眠險些暈厥！", af: [{c: 'doctor', v: -15, s: '擔憂'}], h: -15, ex: 'shocked'},
-                   {t: "極度崩潰，不餵了，把孩子丟給下人！", fb: "【眾人 體諒】夫人這幾日確實累壞了。但驟然停餵容易塞奶發炎，請讓奴婢們協助您躺餵休息吧。", af: [{c: 'maid', v: -10, s: '心疼'}], h: -20, ex: 'shocked'}]}
+            {img:"doctor", char:"太醫 張大人", q:"【含乳姿勢】為避免乳頭破損，正確的含乳姿勢應該是？", s:["張太醫：「夫人，小主子若含乳姿勢不對，只含住乳頭會導致微血管破損流血。」\n\n【衛教小知識】：正確含乳應讓寶寶嘴巴張大，含住「大部分的乳暈」，下巴貼緊乳房，才能有效吸吮且保護皮膚。"],
+             opts:[{t:"讓寶寶嘴巴張大，下巴緊貼乳房，含住大部分的乳暈吸吮。", fb:"【太醫 點頭稱是】夫人處理得非常得當！大口含住乳暈才能正確擠壓乳腺，親餵才不會痛！", af:[{c:'doctor',v:25,s:'欣慰'}], h:25, ex:'happy'},
+                   {t:"做母親的忍一忍就過去了，只要寶寶含住乳頭最前端用力吸就好。", fb:"【太醫 搖頭嘆息】萬萬不可強忍！只含乳頭不僅吸不到奶，而且很快就會導致嚴重破損與發炎啊。", af:[{c:'doctor',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
+                   {t:"破損太痛了，內心感到恐懼，決定徹底放棄哺乳改餵水。", fb:"【太醫 柔聲規勸】夫人莫怕，親餵初期的確是個考驗。破損處塗抹少許母乳便能天然修復，微臣這就讓醫女來協助您調整姿勢，切莫沮喪。", af:[{c:'doctor',v:-10,s:'關切'}], h:-10, ex:'shocked'}]},
+            {img:"doctor", char:"太醫 張大人", q:"【夜間猛長期】面對猛長期的頻繁夜奶，您該如何調適？", s:["半夜，小少爺頻繁討奶。太醫勸您喝濃茶提神撐著餵。\n\n【衛教小知識】：猛長期需配合寶寶頻繁躺餵。切勿飲用濃茶（咖啡因會影響寶寶睡眠）。"],
+             opts:[{t:"斥退濃茶，明白這是猛長期，採用躺餵並同步補眠。", fb:"【眾人 嘆服】夫人明智！躺餵並同步補眠，才是親餵長久之計！", af:[{c:'doctor',v:20,s:'欣慰'},{c:'maid',v:10,s:'安心'}], h:25, ex:'happy'},
+                   {t:"喝下濃茶，強撐著疲憊的身軀坐直餵奶一整夜。", fb:"【太醫 驚呼】濃茶咖啡因會影響寶寶，且您嚴重剝奪睡眠險些暈厥！", af:[{c:'doctor',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
+                   {t:"極度崩潰，不餵了，把孩子丟給下人！", fb:"【眾人 體諒】夫人這幾日確實累壞了。但驟然停餵容易塞奶發炎，請讓奴婢們協助您躺餵休息吧。", af:[{c:'maid',v:-10,s:'心疼'}], h:-20, ex:'shocked'}]}
         ],
         'medic': [
-            {char: "醫女 蘇氏", q: "【尋乳信號】看到寶寶的早期尋乳信號，夫人該怎麼做？", s: ["蘇氏：「夫人，小主子轉頭舔唇、把小手放進嘴裡，這是在發出『尋乳信號』了。」\n\n【衛教小知識】：舔唇、尋乳反射、吃手是飢餓的早期信號。若等到嚎啕大哭已是過度飢餓，反而容易抗拒含乳。"],
-             opts: [{t: "趁他情緒安穩、尚未大哭前，趕緊抱過來依需求親餵。", fb: "【蘇醫女 欣喜】夫人抓時機抓得真準！這時餵奶寶寶情緒穩定，含乳也會最順利！", af: [{c: 'medic', v: 25, s: '崇敬'}], h: 25, ex: 'happy'},
-                   {t: "嚴格遵守長輩定時四小時餵一次的規矩，時間沒到先別理他。", fb: "【蘇醫女 柔聲提醒】夫人，初生嬰兒胃口小，不能嚴格限制時間喔。等他哭鬧厲害時，往往就因為太餓而不好含乳了呢。", af: [{c: 'medic', v: -15, s: '擔憂'}], h: -15, ex: 'shocked'},
-                   {t: "覺得寶寶一直吃手是不乖的壞習慣，拿手套把他的小手綁起來。", fb: "【蘇醫女 趕忙解釋】夫人誤會小少爺了，吃手是新生兒天生的尋乳反射，這是在告訴您他想喝奶了呢，這是聰明的表現喔。", af: [{c: 'medic', v: -10, s: '關切'}], h: -10, ex: 'shocked'}]},
-            {char: "醫女 蘇氏", q: "【安撫迷思】面對剛出生幾天寶寶的哭鬧，正確的安撫首選是？", s: ["蘇氏：「夫人，為防寶寶產生『乳頭混淆』，在親餵尚未順暢的前幾週，建議先不要使用橡膠安撫奶嘴。」\n\n【衛教小知識】：過早給予安撫奶嘴可能會影響寶寶正確含乳的學習。"],
-             opts: [{t: "多與寶寶進行肌膚接觸，或是直接抱起來進行依需求親餵安撫。", fb: "【蘇醫女 欣喜】非常正確！媽媽的乳房是寶寶最好的安撫，這樣也最能刺激母乳分泌！", af: [{c: 'medic', v: 25, s: '崇敬'}], h: 25, ex: 'happy'},
-                   {t: "為了圖省事，只要寶寶一哭就立刻塞進安撫奶嘴，定時才餵奶。", fb: "【蘇醫女 溫柔提醒】夫人，這時候少爺的吸吮本能還在建立，過早用奶嘴容易讓他混淆，之後可能會抗拒媽媽的乳房喔。", af: [{c: 'medic', v: -15, s: '擔憂'}], h: -15, ex: 'shocked'},
-                   {t: "有些不知所措，覺得自己照顧不好寶寶，感到焦慮挫折。", fb: "【蘇醫女 給予擁抱】夫人別沮喪，每個媽媽都是從頭學起的。有奴婢在，咱們一塊兒拍嗝、抱抱他，寶寶能感受到您的愛的。", af: [{c: 'medic', v: -5, s: '關切'}], h: -10, ex: 'shocked'}]}
+            {img:"medic", char:"醫女 蘇氏", q:"【尋乳信號】看到寶寶的早期尋乳信號，夫人該怎麼做？", s:["蘇氏：「夫人，小主子轉頭舔唇、把小手放進嘴裡，這是在發出『尋乳信號』了。」\n\n【衛教小知識】：舔唇、尋乳反射、吃手是飢餓的早期信號。若等到嚎啕大哭已是過度飢餓，反而容易抗拒含乳。"],
+             opts:[{t:"趁他情緒安穩、尚未大哭前，趕緊抱過來依需求親餵。", fb:"【蘇醫女 欣喜】夫人抓時機抓得真準！這時餵奶寶寶情緒穩定，含乳也會最順利！", af:[{c:'medic',v:25,s:'崇敬'}], h:25, ex:'happy'},
+                   {t:"嚴格遵守長輩定時四小時餵一次的規矩，時間沒到先別理他。", fb:"【蘇醫女 柔聲提醒】夫人，初生嬰兒胃口小，不能嚴格限制時間喔。等他哭鬧厲害時，往往就因為太餓而不好含乳了呢。", af:[{c:'medic',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
+                   {t:"覺得寶寶一直吃手是不乖的壞習慣，拿手套把他的小手綁起來。", fb:"【蘇醫女 趕忙解釋】夫人誤會小少爺了，吃手是新生兒天生的尋乳反射，這是在告訴您他想喝奶了呢，這是聰明的表現喔。", af:[{c:'medic',v:-10,s:'關切'}], h:-10, ex:'shocked'}]},
+            {img:"medic", char:"醫女 蘇氏", q:"【安撫迷思】面對剛出生幾天寶寶的哭鬧，正確的安撫首選是？", s:["蘇氏：「夫人，為防寶寶產生『乳頭混淆』，在親餵尚未順暢的前幾週，建議先不要使用橡膠安撫奶嘴。」\n\n【衛教小知識】：過早給予安撫奶嘴可能會影響寶寶正確含乳的學習。"],
+             opts:[{t:"多與寶寶進行肌膚接觸，或是直接抱起來進行依需求親餵安撫。", fb:"【蘇醫女 欣喜】非常正確！媽媽的乳房是寶寶最好的安撫，這樣也最能刺激母乳分泌！", af:[{c:'medic',v:25,s:'崇敬'}], h:25, ex:'happy'},
+                   {t:"為了圖省事，只要寶寶一哭就立刻塞進安撫奶嘴，定時才餵奶。", fb:"【蘇醫女 溫柔提醒】夫人，這時候少爺的吸吮本能還在建立，過早用奶嘴容易讓他混淆，之後可能會抗拒媽媽的乳房喔。", af:[{c:'medic',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
+                   {t:"有些不知所措，覺得自己照顧不好寶寶，感到焦慮挫折。", fb:"【蘇醫女 給予擁抱】夫人別沮喪，每個媽媽都是從頭學起的。有奴婢在，咱們一塊兒拍嗝、抱抱他，寶寶能感受到您的愛的。", af:[{c:'medic',v:-5,s:'關切'}], h:-10, ex:'shocked'}]}
         ]
     };
 
@@ -197,7 +200,7 @@
     const SAVE_KEY = "BianjingNursingGameSaveV4";
 
     function saveGame() {
-        const d = { day: currentDay, P: P, Q: QPool, sn: selN, sb: selB };
+        const d = { day: currentDay, P: P, Q: QPool, sn: selN, sf: selF, sc: selC, sb: selB };
         localStorage.setItem(SAVE_KEY, JSON.stringify(d));
         fTexts.push(new FloatingText(canvas.width / 2, 200, "【進度已儲存】", "#66ff66"));
         SE.save();
@@ -209,7 +212,7 @@
             try {
                 const d = JSON.parse(s);
                 currentDay = d.day; P = d.P; QPool = d.Q;
-                selN = d.sn; selB = d.sb;
+                selN = d.sn; selF = d.sf; selC = d.sc; selB = d.sb;
                 isEarlyEnd = false; state = STATES.DAY_TRANSITION;
                 SE.win(); return true;
             } catch (e) { return false; }
@@ -258,7 +261,7 @@
             currentStage = QPool[rId].pop(); 
         } else {
             currentStage = {
-                char: P.aff[rId].n, 
+                char: P.aff[rId].n, img: rId,
                 s: ["「夫人喚微臣/奴婢前來，可是身子有些勞累？產後多休息，保持心情愉悅是最好的調養喔。」"], 
                 q: "【後宅關懷】面對下人的貼心問候，您打算？", 
                 opts: shuf([
@@ -280,28 +283,28 @@
             else if(earlyEndChar==='chef') fT="「夫人胃口不佳，定是奴才伺候不周。產後調養非一日之功，夫人莫急，奴才再去熬碗溫熱的清湯。」";
             else if(earlyEndChar==='doctor') fT="「夫人脈象虛浮，切莫過於操勞。母乳哺育固然重要，但母親的鳳體安康才是根本啊。」";
             else if(earlyEndChar==='medic') fT="「夫人，哺餵母乳是一條漫長且充滿挑戰的路。若真的累了，稍微依靠一下旁人也無妨的。」";
-            endScenes.push({n: `【${cN} 的體諒】`, t: fT});
-            endScenes.push({n: "【暫時的休息】", t: "看著您日夜操勞，老夫人特地安排了經驗豐富的老嬤嬤來幫忙照看小少爺，好讓您能安心休養身子。"});
-            endScenes.push({n: "【來日方長】", t: "產後需要適應的事情太多，適時放手並尋求專業外援協助，也是一種愛自己與愛孩子的智慧。您辛苦了，好好睡一覺吧！"});
+            endScenes.push({role: earlyEndChar, expr: 'shocked', n: `【${cN} 的體諒】`, t: fT});
+            endScenes.push({role: 'baby', expr: 'normal', n: "【暫時的休息】", t: "看著您日夜操勞，老夫人特地安排了經驗豐富的老嬤嬤來幫忙照看小少爺，好讓您能安心休養身子。"});
+            endScenes.push({role: 'medic', expr: 'happy', n: "【來日方長】", t: "產後需要適應的事情太多，適時放手並尋求專業外援協助，也是一種愛自己與愛孩子的智慧。您辛苦了，好好睡一覺吧！"});
         } else {
             if(P.score>=80 && totAff>=200) {
                 eType='good'; eTitle="【結局：游刃有餘，溫慧主母】"; eColor="#ffccd5";
-                endScenes.push({n: "【幸福滿月】", t: `在您的用心調養與科學哺餵下，小少爺迎來了滿月。看著他白胖健康的模樣，所有的付出都化為了滿滿的幸福。`});
-                endScenes.push({n: "【後宅和樂】", t: "府內上下對您的智慧與溫和讚不絕口，下人們盡心伺候，後宅一派祥和，為您建立強大的育兒後盾。"});
-                endScenes.push({n: "【美滿豐收】", t: "張太醫與醫女常稱讚您的調養手法。您不僅成功在母嬰健康中取得平衡，更體會到了為人母的喜悅與自信！"});
+                endScenes.push({role: 'baby', expr: 'normal', n: "【幸福滿月】", t: `在您的用心調養與科學哺餵下，小少爺迎來了滿月。看著他白胖健康的模樣，所有的付出都化為了滿滿的幸福。`});
+                endScenes.push({role: 'maid', expr: 'happy', n: "【後宅和樂】", t: "府內上下對您的智慧與溫和讚不絕口，下人們盡心伺候，後宅一派祥和，為您建立強大的育兒後盾。"});
+                endScenes.push({role: 'player', expr: 'happy', n: "【美滿豐收】", t: "張太醫與醫女常稱讚您的調養手法。您不僅成功在母嬰健康中取得平衡，更體會到了為人母的喜悅與自信！"});
             } else if(totAff>=160) {
                 eType='normal'; eTitle="【結局：漸入佳境，來日方長】"; eColor="#ffe4b5";
-                endScenes.push({n: "【踏實的一步】", t: `這七日的時光雖然偶有新手媽媽的生疏，但您與寶寶都在努力適應彼此，建立起良好的默契。`});
-                endScenes.push({n: "【溫暖支持】", t: "下人們看著您體貼且努力的模樣，無不盡力給予協助。母乳與調養之路雖然需要時間，但有大家的陪伴，未來定能越來越好。"});
+                endScenes.push({role: 'maid', expr: 'happy', n: "【踏實的一步】", t: `這七日的時光雖然偶有新手媽媽的生疏，但您與寶寶都在努力適應彼此，建立起良好的默契。`});
+                endScenes.push({role: 'player', expr: 'happy', n: "【溫暖支持】", t: "下人們看著您體貼且努力的模樣，無不盡力給予協助。母乳與調養之路雖然需要時間，但有大家的陪伴，未來定能越來越好。"});
             } else {
                 eType='normal'; eTitle="【結局：新手上路，溫柔以待】"; eColor="#b0c4de";
-                endScenes.push({n: "【給予空間】", t: `剛經歷完生產，身心疲憊在所難免。面對繁瑣的餵奶與調養知識，一時感到力不從心也是完全正常的。`});
-                endScenes.push({n: "【擁抱自己】", t: "這只是第一週，您已經跨出了最勇敢的一步。不要給自己太大的壓力，放慢腳步，給自己和寶寶多一點時間與溫柔，大家都深深支持著您。"});
+                endScenes.push({role: 'doctor', expr: 'shocked', n: "【給予空間】", t: `剛經歷完生產，身心疲憊在所難免。面對繁瑣的餵奶與調養知識，一時感到力不從心也是完全正常的。`});
+                endScenes.push({role: 'player', expr: 'normal', n: "【擁抱自己】", t: "這只是第一週，您已經跨出了最勇敢的一步。不要給自己太大的壓力，放慢腳步，給自己和寶寶多一點時間與溫柔，大家都深深支持著您。"});
             }
-            if(P.aff['maid'].t>=80) endScenes.push({n: "【春桃的承諾】", t: `春桃貼心地替您捏腳：「夫人，奴婢看著您學餵奶雖然辛苦，但您真了不起。奴婢一定會好好幫您分擔的！」`});
-            if(P.aff['chef'].t>=80) endScenes.push({n: "【總管的敬意】", t: `總管在膳房特別注意：「夫人產後脾胃嬌貴，那些生冷油膩的通通不許上，天天都要給夫人準備最好的清淡滋補湯！」`});
-            if(P.aff['doctor'].t>=80) endScenes.push({n: "【太醫的讚許】", t: `張太醫懸絲診脈後微笑：「夫人氣血平穩，皆因情緒調適得當、不盲信偏方，實乃母嬰之福。」`});
-            if(P.aff['medic'].t>=80) endScenes.push({n: "【蘇氏的陪伴】", t: `蘇醫女常來陪您聊天、指導正確含乳：「夫人進步真快，看少爺吸吮得多好。您若累了隨時叫我，別憋在心裡喔。」`});
+            if(P.aff['maid'].t>=80) endScenes.push({role: 'maid', expr:'happy',n:"【春桃的承諾】",t:`春桃貼心地替您捏腳：「夫人，奴婢看著您學餵奶雖然辛苦，但您真了不起。奴婢一定會好好幫您分擔的！」`});
+            if(P.aff['chef'].t>=80) endScenes.push({role: 'chef', expr:'happy',n:"【總管的敬意】",t:`總管在膳房特別注意：「夫人產後脾胃嬌貴，那些生冷油膩的通通不許上，天天都要給夫人準備最好的清淡滋補湯！」`});
+            if(P.aff['doctor'].t>=80) endScenes.push({role: 'doctor', expr:'happy',n:"【太醫的讚許】",t:`張太醫懸絲診脈後微笑：「夫人氣血平穩，皆因情緒調適得當、不盲信偏方，實乃母嬰之福。」`});
+            if(P.aff['medic'].t>=80) endScenes.push({role: 'medic', expr:'happy',n:"【蘇氏的陪伴】",t:`蘇醫女常來陪您聊天、指導正確含乳：「夫人進步真快，看少爺吸吮得多好。您若累了隨時叫我，別憋在心裡喔。」`});
         }
     }
 
@@ -317,11 +320,6 @@
     class RSlash { constructor(x,y){this.x=x;this.y=y;this.l=1;this.p=0;} update(){this.p+=(1-this.p)*0.25;this.l-=0.025;} draw(ctx){ctx.save();ctx.globalAlpha=Math.max(0,this.l);ctx.translate(this.x,this.y);ctx.strokeStyle='#ffbbbb';ctx.lineWidth=20;ctx.lineCap='round';ctx.shadowColor='rgba(255,150,150,0.6)';ctx.shadowBlur=20;let len=100*this.p;ctx.beginPath();ctx.moveTo(-len,-len);ctx.lineTo(len,len);ctx.stroke();if(this.p>0.2){let len2=100*((this.p-0.2)/0.8);ctx.beginPath();ctx.moveTo(len2,-len2);ctx.lineTo(-len2,len2);ctx.stroke();}ctx.restore();} }
     class FloatingText { constructor(x,y,t,c){this.x=x;this.y=y;this.t=t;this.c=c;this.l=1;this.sc=0.5;} update(){this.y-=1.2;this.l-=0.012;this.sc+=(1-this.sc)*0.2;} draw(ctx){ctx.save();ctx.globalAlpha=Math.max(0,this.l);ctx.translate(this.x,this.y);ctx.scale(this.sc,this.sc);ctx.fillStyle=this.c;ctx.font='bold 30px "Kaiti", serif';ctx.shadowColor='rgba(0,0,0,0.8)';ctx.shadowBlur=4;ctx.textAlign='center';ctx.fillText(this.t,0,0);ctx.restore();} }
 
-    // 加入粒子
-    for(let i=0;i<100;i++) snowflakes.push(new Snow()); 
-    for(let i=0;i<80;i++) raindrops.push(new Rain()); 
-    for(let i=0;i<30;i++) petals.push(new Petal());
-
     // ==========================================
     // 7. UI 與純淨排版渲染
     // ==========================================
@@ -330,7 +328,9 @@
         btns: [{x: 80, y: 680, w: 640, h: 60}, {x: 80, y: 760, w: 640, h: 60}, {x: 80, y: 840, w: 640, h: 60}],
         nL: {x: 230, y: 300, w: 40, h: 40}, nR: {x: 480, y: 300, w: 40, h: 40}, 
         rL: {x: 230, y: 400, w: 40, h: 40}, rR: {x: 480, y: 400, w: 40, h: 40},
-        cfBtn: {x: 300, y: 550, w: 200, h: 60},
+        fL: {x: 230, y: 500, w: 40, h: 40}, fR: {x: 480, y: 500, w: 40, h: 40},
+        cL: {x: 230, y: 600, w: 40, h: 40}, cR: {x: 480, y: 600, w: 40, h: 40},
+        cfBtn: {x: 300, y: 700, w: 200, h: 60},
         maps: {maid:{x:80,y:400,w:300,h:180,n:"【夫人臥房】",d:"尋找春桃"}, chef:{x:420,y:400,w:300,h:180,n:"【侯府膳房】",d:"傳喚總管"}, doc:{x:80,y:620,w:300,h:180,n:"【前院廳堂】",d:"召見太醫"}, med:{x:420,y:620,w:300,h:180,n:"【廂房醫署】",d:"私下請教"}}
     };
 
@@ -370,12 +370,18 @@
         ctx.textBaseline='alphabetic';
     }
 
-    function drawMap(z) {
+    function drawMap(z, rId) {
         let h = isHov(z); if(h&&lastHover!==z.n){SE.hover();lastHover=z.n;}else if(!h&&lastHover===z.n)lastHover=null;
         ctx.fillStyle=h?'rgba(100,70,50,0.9)':'rgba(44,36,27,0.85)'; ctx.fillRect(z.x,z.y,z.w,z.h);
         ctx.strokeStyle=h?'#fff':'#cdae77'; ctx.lineWidth=h?4:2; ctx.strokeRect(z.x,z.y,z.w,z.h);
         ctx.fillStyle=h?'#fff':'#ffdd66'; ctx.font='bold 32px Kaiti'; ctx.textAlign='center'; ctx.fillText(z.n,z.x+z.w/2,z.y+80);
         ctx.fillStyle='#f4ebd0'; ctx.font='22px Kaiti'; ctx.fillText(z.d,z.x+z.w/2,z.y+130);
+        
+        // 畫地圖小圖標
+        let img = LImgs[rId] && LImgs[rId]['normal'];
+        if(img && img.complete) {
+            ctx.drawImage(img, 40, 30, 120, 120, z.x+z.w/2-40, z.y+110, 80, 80);
+        }
     }
 
     function drawBox(n, t, hint=true) {
@@ -460,11 +466,23 @@
         } else if(state===STATES.CREATION) {
             ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillRect(0,0,800,900); 
             ctx.fillStyle='#ffdd66'; ctx.font='bold 40px Kaiti'; ctx.textAlign='center'; ctx.fillText("【主母設定】",400,150);
+            
+            // 加入臉型與服飾選擇按鈕，使介面完整
             ctx.fillStyle='#f4ebd0'; ctx.font='28px Kaiti'; 
-            ctx.fillText("名諱",200,325); drawBtn(UI.nL,"<",true); drawBtn(UI.nR,">",true); ctx.fillStyle='#cdae77'; ctx.font='32px Kaiti'; ctx.fillText(NList[selN],400,325);
+            ctx.fillText("名諱",200,300); drawBtn(UI.nL,"<",true); drawBtn(UI.nR,">",true); ctx.fillStyle='#cdae77'; ctx.font='32px Kaiti'; ctx.fillText(NList[selN],400,300);
+            
             ctx.fillStyle='#f4ebd0'; ctx.font='28px Kaiti'; 
-            ctx.fillText("出身",200,425); drawBtn(UI.rL,"<",true); drawBtn(UI.rR,">",true); ctx.fillStyle='#cdae77'; ctx.font='32px Kaiti'; ctx.fillText(BList[selB],400,425);
+            ctx.fillText("出身",200,400); drawBtn(UI.rL,"<",true); drawBtn(UI.rR,">",true); ctx.fillStyle='#cdae77'; ctx.font='32px Kaiti'; ctx.fillText(BList[selB],400,400);
+            
+            ctx.fillStyle='#f4ebd0'; ctx.font='28px Kaiti'; 
+            ctx.fillText("容貌",200,500); drawBtn(UI.fL,"<",true); drawBtn(UI.fR,">",true); ctx.fillStyle='#cdae77'; ctx.font='32px Kaiti'; ctx.fillText(faceNames[selF],400,500);
+            
+            ctx.fillStyle='#f4ebd0'; ctx.font='28px Kaiti'; 
+            ctx.fillText("服飾",200,600); drawBtn(UI.cL,"<",true); drawBtn(UI.cR,">",true); ctx.fillStyle='#cdae77'; ctx.font='32px Kaiti'; ctx.fillText(clothNames[selC],400,600);
+
             drawBtn(UI.cfBtn,"踏入侯府",true);
+            
+            let img = LImgs[`player_${FList[selF]}_${CList[selC]}`]?.normal; if(img) { ctx.save(); ctx.translate(650,450); ctx.scale(1,1.3+Math.sin(time*2.5)*0.015); ctx.drawImage(img,-110,-140,220,280); ctx.restore(); }
         } else if(state===STATES.DAY_TRANSITION) {
             ctx.fillStyle='rgba(0,0,0,0.85)'; ctx.fillRect(0,0,800,900); 
             ctx.fillStyle='#cdae77'; ctx.font='bold 50px Kaiti'; ctx.textAlign='center'; ctx.fillText(`產後第 ${day} 天`,400,350);
@@ -475,20 +493,34 @@
             ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,800,900); drawDPnl(); drawSPnl();
             ctx.fillStyle='#ffdd66'; ctx.font='bold 40px Kaiti'; ctx.textAlign='center'; ctx.fillText("【侯府地圖探索】",400,300); 
             ctx.fillStyle='#f4ebd0'; ctx.font='26px Kaiti'; ctx.fillText("今日趁著閒暇，夫人打算去哪裡走走？",400,360);
-            drawMap(UI.maps.maid); drawMap(UI.maps.chef); drawMap(UI.maps.doc); drawMap(UI.maps.med);
+            drawMap(UI.maps.maid, 'maid'); drawMap(UI.maps.chef, 'chef'); drawMap(UI.maps.doc, 'doctor'); drawMap(UI.maps.med, 'medic');
         } else if(state===STATES.STORY || state===STATES.QUESTION || state===STATES.FEEDBACK) {
             if(state===STATES.STORY) { 
+                let img = currentStage.img || 'baby';
+                if(img === 'player') img = P.id;
+                drawChar(img, rep(currentStage.char || '系統'), 'normal', Math.sin(time*3)*5);
                 drawBox("【劇情與衛教】", rep(currentStage.s[storyLine])); 
             }
             else if(state===STATES.QUESTION) { 
+                let img = currentStage.img || 'baby';
+                if(img === 'player') img = P.id;
+                drawChar(img, rep(currentStage.char || '系統'), 'normal', Math.sin(time*3)*5);
                 drawBox(currentStage.q.includes("支線")?"【互動抉擇】":"【測驗：請夫人抉擇】", rep(currentStage.q), false); 
                 currentStage.opts.forEach((o,i)=>drawBtn(UI.btns[i], "選項 "+(i+1)+"："+rep(o.t))); 
             }
             else { 
+                let img = currentStage.img || 'baby';
+                if(img === 'player') img = P.id;
+                let ex = currentExpr === 'angry' ? 'normal' : currentExpr; // 防驚嚇處理
+                drawChar(img, rep(currentStage.char || '系統'), ex, Math.sin(time*3)*5);
                 drawBox("【情境發展】", rep(fbText)); 
             }
         } else if(state===STATES.END_ANIM) {
             let sc=endScenes[endIdx];
+            let cN=sc.role==='baby'?'內心獨白':(P.aff[sc.role]?P.aff[sc.role].n:"未知");
+            let img = sc.role;
+            if(img === 'player') img = P.id;
+            drawChar(img, cN, sc.expr, Math.sin(time*3)*5);
             drawBox(sc.n, sc.t);
         } else if(state===STATES.END) {
             let og=ctx.createLinearGradient(0,0,0,900); og.addColorStop(0,'rgba(0,0,0,0.55)'); og.addColorStop(0.5,'rgba(0,0,0,0.75)'); og.addColorStop(1,'rgba(0,0,0,0.95)'); ctx.fillStyle=og; ctx.fillRect(0,0,800,900);
@@ -520,7 +552,9 @@
         } else if(state===STATES.CREATION) {
             if(isHov(UI.nL)){SE.click();selN=(selN-1+NList.length)%NList.length;} if(isHov(UI.nR)){SE.click();selN=(selN+1)%NList.length;}
             if(isHov(UI.rL)){SE.click();selB=(selB-1+BList.length)%BList.length;} if(isHov(UI.rR)){SE.click();selB=(selB+1)%BList.length;}
-            if(isHov(UI.cfBtn)){SE.click();P.name=NList[selN]; P.origin=BList[selB]; P.residence=residences[selB]; initG();}
+            if(isHov(UI.fL)){SE.click();selF=(selF-1+FList.length)%FList.length;} if(isHov(UI.fR)){SE.click();selF=(selF+1)%FList.length;}
+            if(isHov(UI.cL)){SE.click();selC=(selC-1+CList.length)%CList.length;} if(isHov(UI.cR)){SE.click();selC=(selC+1)%CList.length;}
+            if(isHov(UI.cfBtn)){SE.click();P.name=NList[selN]; P.id=`player_${FList[selF]}_${CList[selC]}`; P.origin=BList[selB]; P.residence=residences[selB]; initG();}
         } else if(state===STATES.DAY_TRANSITION) {
             SE.click();
             if(day===1) { currentStage=introStage; if(currentStage.opts) currentStage.opts=shuf(currentStage.opts); state=STATES.STORY; }
