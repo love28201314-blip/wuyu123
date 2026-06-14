@@ -66,8 +66,7 @@
     
     let cameraShake = { x: 0, y: 0, amount: 0 };
     let bloomIntensity = 0;
-    let dustParticles = [];
-
+    
     let player = { 
         knowledgeScore: 50,
         affections: {
@@ -77,6 +76,26 @@
             medic: { name: "醫女 蘇氏", current: 50, target: 50, max: 100, color: "#82c0d9", status: "平淡" }
         }
     };
+
+    class DustParticle {
+        constructor() {
+            this.x = Math.random() * cw; this.y = Math.random() * ch;
+            this.size = Math.random() * 2 + 0.5;
+            this.vx = (Math.random() - 0.5) * 0.5; this.vy = (Math.random() - 0.5) * 0.5 - 0.2;
+            this.life = Math.random() * Math.PI * 2;
+        }
+        update(dt) {
+            this.x += this.vx + Math.sin(time + this.life) * 0.5; this.y += this.vy; this.life += dt;
+            if (this.y < 0) this.y = ch; if (this.x < 0) this.x = cw; if (this.x > cw) this.x = 0;
+        }
+        draw(ctx) {
+            let alpha = (Math.sin(this.life * 2) + 1) * 0.3;
+            ctx.fillStyle = `rgba(255, 220, 150, ${alpha})`;
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
+        }
+    }
+    let dustParticles = [];
+    for(let i=0; i<40; i++) dustParticles.push(new DustParticle());
 
     class ProceduralLive2DCharacter {
         constructor(role, customColors = null) {
@@ -459,7 +478,6 @@
         }
     }
 
-    // 實例化各自具有獨特特徵的角色
     const mainCharacter = new ProceduralLive2DCharacter('player');
     const npcs = {
         maid: new ProceduralLive2DCharacter('maid', { skinBase: '#fae3d9', skinShadow: '#d9a896', skinHighlight: '#fff1ec', hairDark: '#2a1b1d', hairLight: '#4a3236', silkBase: '#d48a9a', silkShadow: '#9c5263', goldTrim: null }),
@@ -685,8 +703,6 @@
         ctx.restore();
         clickZones.push({ id: id, ...btn });
     }
-
-    for(let i=0; i<40; i++) dustParticles.push(new DustParticle());
 
     function gameLoop(timestamp) {
         dt = (timestamp - lastTime) / 1000 || 0;
