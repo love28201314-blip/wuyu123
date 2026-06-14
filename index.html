@@ -65,7 +65,7 @@
     let time = 0;
     let dt = 0;
     let lastTime = 0;
-    let clickZones = []; // 儲存當前幀可點擊的按鈕
+    let clickZones = []; 
     
     let cameraShake = { x: 0, y: 0, amount: 0 };
     let bloomIntensity = 0;
@@ -315,7 +315,7 @@
         }
     }
 
-    // 實例化角色 (主母與四位NPC)
+    // 實例化角色
     const mainCharacter = new ProceduralLive2DCharacter();
     const npcs = {
         maid: new ProceduralLive2DCharacter({ skinBase: '#fae3d9', skinShadow: '#d9a896', skinHighlight: '#fff1ec', hairDark: '#1a1012', hairLight: '#3f2c30', silkBase: '#b04a5b', silkShadow: '#5c1b26', goldTrim: '#f5c6c6' }),
@@ -324,7 +324,7 @@
         medic: new ProceduralLive2DCharacter({ skinBase: '#fae3d9', skinShadow: '#d9a896', skinHighlight: '#fff1ec', hairDark: '#10181c', hairLight: '#2b3a42', silkBase: '#5a8b9e', silkShadow: '#264a5c', goldTrim: '#b1d8e6' })
     };
 
-    // 環境粒子系統
+    // 環境粒子
     class DustParticle {
         constructor() {
             this.x = Math.random() * cw; this.y = Math.random() * ch;
@@ -377,7 +377,7 @@
         update() { this.y -= 1.2; this.life -= 0.015; this.scale += (1 - this.scale) * 0.2; }
         draw(ctx) {
             ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y); ctx.scale(this.scale, this.scale);
-            ctx.fillStyle = this.color; ctx.font = 'bold 28px "Kaiti", serif'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; 
+            ctx.fillStyle = this.color; ctx.font = 'bold 28px "Kaiti", "標楷體", serif'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; 
             ctx.textAlign = 'center'; ctx.fillText(this.text, 0, 0); ctx.restore();
         }
     }
@@ -421,12 +421,14 @@
         ctx.restore();
     }
 
+    // 智能精確斷行文字繪製
     function drawCinematicText(ctx, text, x, y, maxWidth, isTitle = false) {
         ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
-        ctx.fillStyle = isTitle ? '#d4af37' : '#e0e0e0'; ctx.font = isTitle ? 'bold 24px Kaiti' : '20px Kaiti';
+        ctx.fillStyle = isTitle ? '#d4af37' : '#e0e0e0'; 
+        ctx.font = isTitle ? 'bold 26px "Kaiti", "標楷體", serif' : '22px "Kaiti", "標楷體", serif';
         
         let chars = text.split('');
-        let line = ''; let startY = y; let lineHeight = isTitle ? 34 : 28;
+        let line = ''; let startY = y; let lineHeight = isTitle ? 38 : 34;
 
         for (let n = 0; n < chars.length; n++) {
             let char = chars[n];
@@ -436,33 +438,54 @@
                 continue;
             }
             let testLine = line + char;
-            if (ctx.measureText(testLine).width > maxWidth && n > 0) {
-                ctx.fillText(line, x, startY); line = char; startY += lineHeight;
-            } else { line = testLine; }
+            let metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth && n > 0) {
+                ctx.fillText(line, x, startY); 
+                line = char; 
+                startY += lineHeight;
+            } else { 
+                line = testLine; 
+            }
         }
         if(line) ctx.fillText(line, x, startY);
         ctx.shadowBlur = 0;
     }
 
+    // 升級版左上角日期面板 (包含主母大頭貼)
     function drawDatePanel(ctx) {
-        drawGlassPanel(ctx, 20, 20, 220, 85);
+        let panelW = 280; let panelH = 110;
+        drawGlassPanel(ctx, 20, 20, panelW, panelH);
+        
+        // 主母頭像繪製
+        ctx.save();
+        ctx.beginPath(); ctx.arc(70, 75, 35, 0, Math.PI * 2); ctx.clip();
+        ctx.fillStyle = '#121826'; ctx.fill();
+        mainCharacter.draw(ctx, 70, 93, 0.45, true); 
+        ctx.restore();
+        
+        ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 2.5; 
+        ctx.beginPath(); ctx.arc(70, 75, 35, 0, Math.PI*2); ctx.stroke();
+
         ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
-        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 20px Kaiti'; ctx.textAlign = 'left'; ctx.fillText(`【大宋 宣和元年】`, 30, 50);
-        ctx.fillStyle = '#e0e0e0'; ctx.font = '18px Kaiti'; ctx.fillText(`產後第 ${currentDay} 天`, 40, 80);
+        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 24px "Kaiti", "標楷體", serif'; ctx.textAlign = 'left'; 
+        ctx.fillText(`【大宋 宣和元年】`, 120, 60);
+        ctx.fillStyle = '#e0e0e0'; ctx.font = '20px "Kaiti", "標楷體", serif'; 
+        ctx.fillText(`產後第 ${currentDay} 天`, 130, 95);
         ctx.shadowBlur = 0;
     }
 
+    // 升級版右上角好感度面板 (加大 NPC 頭像)
     function drawStatsPanel(ctx) {
-        let panelW = 260; let panelX = Math.max(20, cw - panelW - 20);
-        let panelY = 20; let panelH = 240;
+        let panelW = 320; let panelX = Math.max(20, cw - panelW - 20);
+        let panelY = 20; let panelH = 280;
         
         drawGlassPanel(ctx, panelX, panelY, panelW, panelH);
         
         ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
-        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 18px Kaiti'; ctx.textAlign = 'left';
-        ctx.fillText("【後宅人際關係】", panelX + 15, panelY + 30); ctx.shadowBlur = 0;
+        ctx.fillStyle = '#d4af37'; ctx.font = 'bold 22px "Kaiti", "標楷體", serif'; ctx.textAlign = 'left';
+        ctx.fillText("【後宅人際關係】", panelX + 20, panelY + 35); ctx.shadowBlur = 0;
 
-        let startY = panelY + 65;
+        let startY = panelY + 80;
         for (const key in player.affections) {
             let stat = player.affections[key];
             stat.current += (stat.target - stat.current) * 10 * dt;
@@ -472,32 +495,33 @@
             else if(['嫌隙', '心寒', '厭惡', '覺得荒唐', '心灰意冷', '瑟瑟發抖', '氣急敗壞', '慌張', '恐懼', '強烈厭惡', '疑惑', '擔憂'].includes(stat.status)) statusColor = '#e74c3c';
             else if(['崇拜', '崇敬', '死心塌地', '情同姐妹', '醫者父母心', '敬畏', '知音', '安心', '欣慰', '敬佩'].includes(stat.status)) statusColor = '#4caf50';
 
-            // 繪製 NPC 大頭貼
+            // 繪製 NPC 精緻大頭貼
             let npc = npcs[key];
             if (npc) {
                 let imgExpr = (statusColor === '#e74c3c') ? 'angry' : ((statusColor === '#4caf50') ? 'happy' : 'normal');
                 npc.setEmotion(imgExpr);
                 ctx.save();
-                ctx.beginPath(); ctx.arc(panelX + 35, startY - 5, 18, 0, Math.PI * 2); ctx.clip();
+                ctx.beginPath(); ctx.arc(panelX + 45, startY - 5, 24, 0, Math.PI * 2); ctx.clip();
                 ctx.fillStyle = '#121826'; ctx.fill();
-                // 畫縮小的 Live2D 角色 (isMini = true 來最佳化效能)
-                npc.draw(ctx, panelX + 35, startY + 15, 0.2, true);
+                npc.draw(ctx, panelX + 45, startY + 8, 0.32, true);
                 ctx.restore();
                 
-                ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 1.5;
-                ctx.beginPath(); ctx.arc(panelX + 35, startY - 5, 18, 0, Math.PI*2); ctx.stroke();
+                ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(panelX + 45, startY - 5, 24, 0, Math.PI*2); ctx.stroke();
             }
 
-            ctx.fillStyle = '#fff'; ctx.font = '15px Kaiti'; ctx.textAlign = 'left'; ctx.fillText(`${stat.name}`, panelX + 65, startY - 8);
-            ctx.fillStyle = statusColor; ctx.textAlign = 'right'; ctx.fillText(`[${stat.status}]`, panelX + panelW - 20, startY - 8);
+            ctx.fillStyle = '#fff'; ctx.font = '18px "Kaiti", "標楷體", serif'; ctx.textAlign = 'left'; 
+            ctx.fillText(`${stat.name}`, panelX + 85, startY - 12);
+            ctx.fillStyle = statusColor; ctx.textAlign = 'right'; ctx.font = '16px "Kaiti", "標楷體", serif'; 
+            ctx.fillText(`[${stat.status}]`, panelX + panelW - 20, startY - 12);
             
-            ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.roundRect(panelX + 65, startY + 3, panelW - 85, 6, 3); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.roundRect(panelX + 85, startY + 5, panelW - 105, 8, 4); ctx.fill();
             ctx.fillStyle = stat.color; 
-            let barWidth = Math.max(0, (stat.current / stat.max) * (panelW - 85));
-            ctx.beginPath(); ctx.roundRect(panelX + 65, startY + 3, barWidth, 6, 3); ctx.fill(); 
-            ctx.shadowColor = stat.color; ctx.shadowBlur = 8; ctx.beginPath(); ctx.roundRect(panelX + 65, startY + 3, barWidth, 6, 3); ctx.fill(); ctx.shadowBlur = 0;
+            let barWidth = Math.max(0, (stat.current / stat.max) * (panelW - 105));
+            ctx.beginPath(); ctx.roundRect(panelX + 85, startY + 5, barWidth, 8, 4); ctx.fill(); 
+            ctx.shadowColor = stat.color; ctx.shadowBlur = 8; ctx.beginPath(); ctx.roundRect(panelX + 85, startY + 5, barWidth, 8, 4); ctx.fill(); ctx.shadowBlur = 0;
 
-            startY += 45;
+            startY += 55;
         }
     }
 
@@ -513,7 +537,7 @@
         }
         ctx.fillStyle = bgGrad; ctx.beginPath(); ctx.roundRect(btn.x, btn.y, btn.w, btn.h, 6); ctx.fill();
         ctx.strokeStyle = hover ? '#fff' : '#d4af37'; ctx.lineWidth = hover ? 2 : 1; ctx.stroke();
-        ctx.fillStyle = hover ? '#fff' : '#d4af37'; ctx.font = '20px Kaiti'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = hover ? '#fff' : '#d4af37'; ctx.font = '22px "Kaiti", "標楷體", serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(text, btn.x + btn.w/2, btn.y + btn.h/2); ctx.restore();
         
         clickZones.push({ id: id, ...btn });
@@ -531,10 +555,10 @@
         } else { cameraShake.x = 0; cameraShake.y = 0; }
 
         ctx.save();
-        ctx.scale(dpr, dpr); // 支援 Retina 視網膜高畫質
+        ctx.scale(dpr, dpr); 
         ctx.translate(cameraShake.x, cameraShake.y);
 
-        // 1. 滿版背景
+        // 1. 滿版無縫背景
         let bgGrad = ctx.createRadialGradient(cw/2, ch/2, 100, cw/2, ch/2, Math.max(cw, ch));
         bgGrad.addColorStop(0, '#121826'); bgGrad.addColorStop(1, '#020305');
         ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, cw, ch);
@@ -543,19 +567,30 @@
         dustParticles.forEach(p => { p.update(dt); p.draw(ctx); });
         ctx.globalCompositeOperation = 'source-over';
 
-        // 2. 更新並繪製所有人物
+        // 2. 更新所有角色
         mainCharacter.update(dt);
         Object.values(npcs).forEach(npc => npc.update(dt));
         
-        let charScale = Math.min(cw/800, ch/900) * 1.8;
-        if (charScale < 1) charScale = 1;
-        mainCharacter.draw(ctx, cw/2, ch/2 + 50, charScale);
+        // 判斷中央應該繪製哪位角色
+        let activeCharacter = mainCharacter;
+        if (currentState === STATES.STORY || currentState === STATES.QUESTION || currentState === STATES.FEEDBACK) {
+            let stage = currentStage || introStage;
+            let charName = stage.character || "";
+            if (charName.includes("春桃")) activeCharacter = npcs.maid;
+            else if (charName.includes("總管")) activeCharacter = npcs.chef;
+            else if (charName.includes("張大人") || charName.includes("太醫")) activeCharacter = npcs.doctor;
+            else if (charName.includes("蘇氏") || charName.includes("醫女")) activeCharacter = npcs.medic;
+        }
+
+        // 自適應角色大小與位置
+        let charScale = Math.max(0.8, Math.min(cw/800, ch/900) * 2.0);
+        activeCharacter.draw(ctx, cw/2, ch/2 + 100, charScale);
 
         // 3. UI 響應式渲染
         clickZones = [];
         canvas.style.cursor = 'crosshair'; 
         
-        let boxW = Math.min(700, cw - 40);
+        let boxW = Math.min(740, cw - 40);
         let boxX = cw / 2 - boxW / 2;
 
         if (currentState === STATES.START) {
@@ -563,8 +598,8 @@
             ctx.textAlign = 'center'; ctx.shadowColor = '#d4af37'; ctx.shadowBlur = 20;
             ctx.fillStyle = '#fff'; 
             let titleSize = Math.max(30, Math.min(60, cw * 0.08));
-            ctx.font = `bold ${titleSize}px Kaiti`; ctx.fillText("汴京娘子調養記", cw/2, ch/2 - 100); ctx.shadowBlur = 0;
-            ctx.fillStyle = '#d4af37'; ctx.font = `${titleSize*0.45}px Kaiti`; ctx.fillText("— Unreal 級高階流體物理展示版 —", cw/2, ch/2 - 40);
+            ctx.font = `bold ${titleSize}px "Kaiti", "標楷體", serif`; ctx.fillText("汴京娘子調養記", cw/2, ch/2 - 100); ctx.shadowBlur = 0;
+            ctx.fillStyle = '#d4af37'; ctx.font = `${titleSize*0.45}px "Kaiti", "標楷體", serif`; ctx.fillText("— Unreal 級高階流體物理展示版 —", cw/2, ch/2 - 40);
             
             drawButton(ctx, 'btn_start', {x: cw/2 - 100, y: ch/2 + 80, w: 200, h: 60}, "進入侯府");
         }
@@ -572,44 +607,48 @@
             drawDatePanel(ctx); drawStatsPanel(ctx);
             let stage = currentStage || introStage; let text = stage.story[currentStoryLine];
             
-            let boxY = ch - 240;
-            drawGlassPanel(ctx, boxX, boxY, boxW, 220);
-            drawCinematicText(ctx, `【${stage.character}】`, boxX + 25, boxY + 40, boxW - 50, true);
-            drawCinematicText(ctx, text, boxX + 25, boxY + 80, boxW - 50);
+            let boxH = 260;
+            let boxY = ch - boxH - 20;
+            drawGlassPanel(ctx, boxX, boxY, boxW, boxH);
+            drawCinematicText(ctx, `【${stage.character}】`, boxX + 35, boxY + 45, boxW - 70, true);
+            drawCinematicText(ctx, text, boxX + 35, boxY + 95, boxW - 70);
             
             ctx.globalAlpha = (Math.sin(time * 5) + 1) * 0.5;
-            ctx.fillStyle = '#d4af37'; ctx.textAlign = 'right'; ctx.font = '16px Kaiti'; ctx.fillText("▼ 點擊繼續", boxX + boxW - 20, boxY + 195);
+            ctx.fillStyle = '#d4af37'; ctx.textAlign = 'right'; ctx.font = 'bold 18px "Kaiti", "標楷體", serif'; 
+            ctx.fillText("▼ 點擊繼續", boxX + boxW - 25, boxY + boxH - 25);
             ctx.globalAlpha = 1.0;
-            clickZones.push({ id: 'screen_next', x: 0, y: 0, w: cw, h: ch }); // 全畫面可點擊下一句
+            clickZones.push({ id: 'screen_next', x: 0, y: 0, w: cw, h: ch }); 
         }
         else if (currentState === STATES.QUESTION) {
             drawDatePanel(ctx); drawStatsPanel(ctx);
             let stage = currentStage || introStage;
-            let boxY = ch - 380;
-            drawGlassPanel(ctx, boxX, boxY, boxW, 110);
-            drawCinematicText(ctx, stage.question, boxX + 25, boxY + 45, boxW - 50, true);
+            let boxY = ch - 420;
+            drawGlassPanel(ctx, boxX, boxY, boxW, 140);
+            drawCinematicText(ctx, stage.question, boxX + 30, boxY + 50, boxW - 60, true);
             
-            let btnW = Math.min(600, cw - 60); let btnX = cw / 2 - btnW / 2;
+            let btnW = Math.min(640, cw - 40); let btnX = cw / 2 - btnW / 2;
             stage.options.forEach((opt, idx) => {
-                drawButton(ctx, `opt_${idx}`, {x: btnX, y: boxY + 130 + idx*75, w: btnW, h: 60}, opt.text);
+                drawButton(ctx, `opt_${idx}`, {x: btnX, y: boxY + 160 + idx*75, w: btnW, h: 65}, opt.text);
             });
         }
         else if (currentState === STATES.FEEDBACK) {
             drawDatePanel(ctx); drawStatsPanel(ctx);
-            let boxY = ch - 240;
-            drawGlassPanel(ctx, boxX, boxY, boxW, 220);
-            drawCinematicText(ctx, "【調理結果】", boxX + 25, boxY + 40, boxW - 50, true);
-            drawCinematicText(ctx, selectedOptionFeedback, boxX + 25, boxY + 80, boxW - 50);
+            let boxH = 260;
+            let boxY = ch - boxH - 20;
+            drawGlassPanel(ctx, boxX, boxY, boxW, boxH);
+            drawCinematicText(ctx, "【調理結果】", boxX + 35, boxY + 45, boxW - 70, true);
+            drawCinematicText(ctx, selectedOptionFeedback, boxX + 35, boxY + 95, boxW - 70);
             
             ctx.globalAlpha = (Math.sin(time * 5) + 1) * 0.5;
-            ctx.fillStyle = '#d4af37'; ctx.textAlign = 'right'; ctx.font = '16px Kaiti'; ctx.fillText("▼ 點擊繼續", boxX + boxW - 20, boxY + 195);
+            ctx.fillStyle = '#d4af37'; ctx.textAlign = 'right'; ctx.font = 'bold 18px "Kaiti", "標楷體", serif'; 
+            ctx.fillText("▼ 點擊繼續", boxX + boxW - 25, boxY + boxH - 25);
             ctx.globalAlpha = 1.0;
             clickZones.push({ id: 'screen_next', x: 0, y: 0, w: cw, h: ch });
         }
         else if (currentState === STATES.END) {
             ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,cw,ch);
-            ctx.textAlign = 'center'; ctx.fillStyle = '#d4af37'; ctx.font = 'bold 40px Kaiti'; ctx.fillText("體驗結束", cw/2, ch/2 - 100);
-            ctx.fillStyle = '#fff'; ctx.font = '20px Kaiti'; ctx.fillText(`最終知識分數: ${player.knowledgeScore}`, cw/2, ch/2 - 40);
+            ctx.textAlign = 'center'; ctx.fillStyle = '#d4af37'; ctx.font = 'bold 40px "Kaiti", "標楷體", serif'; ctx.fillText("體驗結束", cw/2, ch/2 - 100);
+            ctx.fillStyle = '#fff'; ctx.font = '20px "Kaiti", "標楷體", serif'; ctx.fillText(`最終知識分數: ${player.knowledgeScore}`, cw/2, ch/2 - 40);
             drawButton(ctx, 'btn_restart', {x: cw/2 - 100, y: ch/2 + 50, w: 200, h: 60}, "重新體驗");
         }
 
