@@ -85,14 +85,15 @@
     let pts = [], fTexts = [], sfxs = [], bgCvs = {};
     let isEarlyEnd = false, earlyEndChar = "", endScenes = [], endIdx = 0, eTitle = "", eColor = "", eType = "normal";
     
-    // 全域宣告天氣粒子，修正 ReferenceError
     let snowflakes = [], raindrops = [], petals = [];
 
     const NList = ['盛明蘭','沈珍珠','王語嫣','趙盼兒','李清照'], FList = ['f1','f2','f3'], CList = ['c1','c2','c3'], BList = ['名門嫡女','書香世家','富商巨賈'];
+    const residences = ['華麗正房', '雅致書閣', '繁華暖閣']; // 修復了 missing residences 變數
     let selN = 0, selF = 0, selC = 0, selB = 0;
     
     let P = {
         name: "主母", origin: "名門嫡女", id: "player_f1_c1", score: 50, 
+        residence: "華麗正房",
         aff: {
             maid: {n:"丫鬟 春桃", c:50, t:50, m:100, col:"#e8b4b8", s:"平淡"}, 
             chef: {n:"膳房 總管", c:50, t:50, m:100, col:"#8c7a6b", s:"平淡"},
@@ -154,7 +155,7 @@
     let QPool = {
         'maid': [
             {img:"maid", char:"丫鬟 春桃", q:"【初乳迷思】面對春桃的疑慮，夫人該如何回應？", s:["春桃：「夫人...這初乳又黃又濃，而且量這麼少，這怎麼夠小少爺塞牙縫呀？」\n\n【衛教小知識】：初乳量雖少，但富含抗體。新生兒胃第一天僅有彈珠大小，少量初乳絕對足夠。"],
-             opts:[{t:"初乳是抗體精華，新生兒胃只有彈珠大，這點量足夠了。", fb:"【春桃 恍然大悟】原來如此！這初乳竟是給小少爺最好的保護，奴婢受教了！", af:[{c:'maid',v:25,s:'崇拜'}], h:25, ex:'happy'},
+             opts:[{t:"初乳是抗體精華，新生兒胃只有彈珠大，這點量足夠了。", fb:"【春桃 恍然大悟】原來如此！這金黃色的初乳竟是給小少爺最好的保護，奴婢受教了！", af:[{c:'maid',v:25,s:'崇拜'}], h:25, ex:'happy'},
                    {t:"妳說得對，奶水確實太少了，快去熬點濃米湯來給少爺墊墊肚子。", fb:"【春桃 慌張】可是...蘇醫女說新生兒腸胃弱不能喝米湯，這法子好像不太安全呢。", af:[{c:'maid',v:-15,s:'擔憂'}], h:-15, ex:'shocked'},
                    {t:"聽得心煩意亂，有些自責是不是自己身體不好。", fb:"【春桃 趕忙安慰】夫人快別這麼說！您千萬別焦慮，奴婢這就去請教蘇醫女，您好好放鬆身心。", af:[{c:'maid',v:-10,s:'關切'}], h:-10, ex:'shocked'}]},
             {img:"maid", char:"丫鬟 春桃", q:"【飽足判斷】判斷寶寶有沒有吃飽，最客觀科學的指標是？", s:["春桃：「夫人，母奶看起來好稀，小主子喝母乳是不是很容易餓，真的有吃飽嗎？」\n\n【衛教小知識】：判斷吃飽最客觀的指標是尿布量。出生第四天後，一天若有6片以上沉甸甸的濕尿布即代表進食充足。"],
@@ -320,6 +321,11 @@
     class RSlash { constructor(x,y){this.x=x;this.y=y;this.l=1;this.p=0;} update(){this.p+=(1-this.p)*0.25;this.l-=0.025;} draw(ctx){ctx.save();ctx.globalAlpha=Math.max(0,this.l);ctx.translate(this.x,this.y);ctx.strokeStyle='#ffbbbb';ctx.lineWidth=20;ctx.lineCap='round';ctx.shadowColor='rgba(255,150,150,0.6)';ctx.shadowBlur=20;let len=100*this.p;ctx.beginPath();ctx.moveTo(-len,-len);ctx.lineTo(len,len);ctx.stroke();if(this.p>0.2){let len2=100*((this.p-0.2)/0.8);ctx.beginPath();ctx.moveTo(len2,-len2);ctx.lineTo(-len2,len2);ctx.stroke();}ctx.restore();} }
     class FloatingText { constructor(x,y,t,c){this.x=x;this.y=y;this.t=t;this.c=c;this.l=1;this.sc=0.5;} update(){this.y-=1.2;this.l-=0.012;this.sc+=(1-this.sc)*0.2;} draw(ctx){ctx.save();ctx.globalAlpha=Math.max(0,this.l);ctx.translate(this.x,this.y);ctx.scale(this.sc,this.sc);ctx.fillStyle=this.c;ctx.font='bold 30px "Kaiti", serif';ctx.shadowColor='rgba(0,0,0,0.8)';ctx.shadowBlur=4;ctx.textAlign='center';ctx.fillText(this.t,0,0);ctx.restore();} }
 
+    // 加入粒子
+    for(let i=0;i<100;i++) snowflakes.push(new Snow()); 
+    for(let i=0;i<80;i++) raindrops.push(new Rain()); 
+    for(let i=0;i<30;i++) petals.push(new Petal());
+
     // ==========================================
     // 7. UI 與純淨排版渲染
     // ==========================================
@@ -433,7 +439,86 @@
         bgCvs[l] = c; return c;
     }
 
+    function createSVG(r, e) {
+        let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250"><defs><linearGradient id="sk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0e6"/><stop offset="1" stop-color="#e8c2a7"/></linearGradient><linearGradient id="hr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#332a2a"/><stop offset="1" stop-color="#110d0d"/></linearGradient></defs>`;
+        
+        // 背景光暈
+        s += `<circle cx="100" cy="100" r="90" fill="#ffffff" opacity="0.1"/>`;
+
+        if(r==='baby') return s+`<path d="M 30 180 Q 100 240 170 180 L 160 130 L 40 130 Z" fill="#8c6a4a" stroke="#5c4530" stroke-width="4"/><path d="M 50 150 C 50 90, 150 90, 150 150 Z" fill="#cc4444" stroke="#882222" stroke-width="2"/><path d="M 60 150 C 60 110, 140 110, 140 150 Z" fill="#e65c5c"/><circle cx="100" cy="115" r="25" fill="#ffe4d6"/><path d="M 88 115 Q 92 118 96 115 M 104 115 Q 108 118 112 115" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round"/><circle cx="100" cy="125" r="4" fill="#ff9999"/><path d="M 75 105 C 75 80, 125 80, 125 105 Z" fill="#ffcc00"/><circle cx="85" cy="85" r="8" fill="#ff9900"/><circle cx="115" cy="85" r="8" fill="#ff9900"/></svg>`;
+        
+        // 統一脖子
+        s += `<rect x="85" y="130" width="30" height="25" fill="url(#sk)"/>`;
+
+        if(r.startsWith('player_')){ 
+            let c=r.split('_')[2]; 
+            if(c==='c1') s+=`<path d="M 20 250 L 50 145 L 150 145 L 180 250 Z" fill="#8a1c1c"/><path d="M 80 145 L 100 180 L 120 145" fill="none" stroke="#d4af37" stroke-width="8"/>`; 
+            else if(c==='c2') s+=`<path d="M 20 250 L 50 145 L 150 145 L 180 250 Z" fill="#2d425c"/><path d="M 80 145 L 100 170 L 120 145" fill="none" stroke="#e0e1dd" stroke-width="6"/>`; 
+            else s+=`<path d="M 20 250 L 50 145 L 150 145 L 180 250 Z" fill="#2a7a6f"/><path d="M 80 145 L 100 175 L 120 145" fill="none" stroke="#f4a261" stroke-width="6"/>`; 
+        }
+        else if(r==='maid') s+=`<path d="M 30 250 L 60 145 L 140 145 L 170 250 Z" fill="#9e666b"/><path d="M 80 145 L 100 190 L 120 145 Z" fill="#ebd6d8"/>`;
+        else if(r==='chef') s+=`<path d="M 20 250 L 40 145 L 160 145 L 180 250 Z" fill="#5c4e43"/><path d="M 70 145 L 130 145 L 130 250 L 70 250 Z" fill="#f2efe9"/>`;
+        else if(r==='doctor') s+=`<path d="M 30 250 L 60 145 L 140 145 L 170 250 Z" fill="#243329"/><path d="M 85 145 L 85 250 M 115 145 L 115 250" stroke="#111" stroke-width="4"/>`;
+        else if(r==='medic') s+=`<path d="M 35 250 L 60 145 L 140 145 L 165 250 Z" fill="#5b7885"/><path d="M 80 145 L 100 175 L 120 145" fill="none" stroke="#e8f0f2" stroke-width="4"/>`;
+        
+        let fw=r==='chef'?45:(r.includes('f2')?42:(r.includes('f3')?46:38));
+        let fh=r==='chef'?50:(r.includes('f2')?50:(r.includes('f3')?45:52));
+
+        s+=`<ellipse cx="100" cy="95" rx="${fw}" ry="${fh}" fill="url(#sk)" stroke="#c29a82" stroke-width="1.5"/>`;
+
+        let ey=90, my=125;
+        if(e==='angry') s+=`<ellipse cx="100" cy="${ey-5}" rx="${fw-5}" ry="20" fill="#332222" opacity="0.3"/>`;
+        if(e==='happy') s+=`<ellipse cx="75" cy="${ey+15}" rx="8" ry="4" fill="#ff7777" opacity="0.6"/><ellipse cx="125" cy="${ey+15}" rx="8" ry="4" fill="#ff7777" opacity="0.6"/>`;
+        if(e==='shocked') s+=`<path d="M 140 60 Q 150 75 140 80 Q 130 75 140 60 Z" fill="#99ccff" opacity="0.8"/>`;
+
+        if(e==='happy') {
+            s+=`<path d="M 70 ${ey+2} Q 80 ${ey-5} 90 ${ey+2} M 110 ${ey+2} Q 120 ${ey-5} 130 ${ey+2}" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round"/>`;
+            s+=`<path d="M 92 ${my-3} Q 100 ${my+10} 108 ${my-3} Z" fill="#d68383"/>`;
+            s+=`<path d="M 35 70 L 45 60 L 50 75 Z" fill="#ffffcc"/>`;
+        } 
+        else if(e==='shocked') {
+            s+=`<circle cx="80" cy="${ey}" r="6" fill="#fff" stroke="#222" stroke-width="1.5"/><circle cx="80" cy="${ey}" r="1.5" fill="#111"/>`;
+            s+=`<circle cx="120" cy="${ey}" r="6" fill="#fff" stroke="#222" stroke-width="1.5"/><circle cx="120" cy="${ey}" r="1.5" fill="#111"/>`;
+            s+=`<circle cx="100" cy="${my+5}" r="5" fill="#444"/>`;
+        } 
+        else if(e==='angry') {
+            s+=`<path d="M 65 ${ey-5} L 85 ${ey+2} M 135 ${ey-5} L 115 ${ey+2}" stroke="#222" stroke-width="3" stroke-linecap="round"/>`;
+            s+=`<circle cx="80" cy="${ey+4}" r="2.5" fill="#111"/><circle cx="120" cy="${ey+4}" r="2.5" fill="#111"/>`;
+            s+=`<path d="M 90 ${my+4} Q 100 ${my-2} 110 ${my+4}" fill="none" stroke="#222" stroke-width="2.5" stroke-linecap="round"/>`;
+            s+=`<path d="M 130 50 L 145 60 M 145 50 L 130 60 M 130 55 L 145 55 M 137.5 50 L 137.5 60" stroke="#ff3333" stroke-width="2"/>`;
+        } 
+        else {
+            s+=`<path d="M 70 ${ey-4} Q 80 ${ey-7} 90 ${ey-4} M 110 ${ey-4} Q 120 ${ey-7} 130 ${ey-4}" fill="none" stroke="#222" stroke-width="2" stroke-linecap="round"/>`;
+            s+=`<circle cx="80" cy="${ey}" r="3.5" fill="#222"/><circle cx="120" cy="${ey}" r="3.5" fill="#222"/>`;
+            s+=`<path d="M 92 ${my} Q 100 ${my+4} 108 ${my}" fill="none" stroke="#c29a82" stroke-width="2" stroke-linecap="round"/>`;
+        }
+
+        if(r.startsWith('player_')){ 
+            let f=r.split('_')[1]; 
+            s+=`<path d="M 40 90 C 30 200, 170 200, 160 90 Z" fill="url(#hr)"/>`;
+            if(f==='f1') { s+=`<path d="M 50 70 C 40 10, 160 10, 150 70 Z" fill="url(#hr)"/><ellipse cx="100" cy="25" rx="35" ry="25" fill="url(#hr)"/><path d="M 90 25 L 60 5" stroke="#d4af37" stroke-width="3"/><circle cx="60" cy="5" r="6" fill="#ff4444"/>`; } 
+            else if(f==='f2') { s+=`<path d="M 40 70 C 20 0, 180 0, 160 70 Z" fill="url(#hr)"/><ellipse cx="100" cy="20" rx="55" ry="30" fill="url(#hr)"/><path d="M 100 20 L 100 -5" stroke="#d4af37" stroke-width="4"/><circle cx="100" cy="-5" r="8" fill="#44cc44"/>`; } 
+            else { s+=`<path d="M 45 70 C 40 20, 160 20, 155 70 Z" fill="url(#hr)"/><circle cx="60" cy="30" r="25" fill="url(#hr)"/><circle cx="140" cy="30" r="25" fill="url(#hr)"/><circle cx="60" cy="30" r="10" fill="#ff9999"/><circle cx="140" cy="30" r="10" fill="#ff9999"/>`; } 
+        }
+        else if(r==='maid') s+=`<path d="M 45 70 C 40 20, 160 20, 155 70 Z" fill="url(#hr)"/><circle cx="55" cy="40" r="22" fill="url(#hr)"/><circle cx="145" cy="40" r="22" fill="url(#hr)"/><path d="M 55 40 L 45 80 M 145 40 L 155 80" stroke="#f66" stroke-width="4" stroke-linecap="round"/>`;
+        else if(r==='chef') s+=`<path d="M 60 50 C 60 0, 140 0, 140 50 Z" fill="#e8e8e8" stroke="#ccc" stroke-width="2"/><path d="M 75 130 Q 100 160 125 130 Z" fill="#333"/>`;
+        else if(r==='doctor') s+=`<path d="M 50 50 L 150 50 L 140 10 L 60 10 Z" fill="#111"/><path d="M 30 45 L 170 45 L 170 55 L 30 55 Z" fill="#000"/><path d="M 85 130 Q 100 180 115 130 Z" fill="#eee"/>`;
+        else if(r==='medic') s+=`<path d="M 45 70 C 40 10, 160 10, 155 70 Z" fill="url(#hr)"/><path d="M 60 20 L 140 20 L 130 50 L 70 50 Z" fill="#8caeb8"/><circle cx="100" cy="35" r="6" fill="#fff"/>`;
+        
+        return s+`</svg>`;
+    }
+
+    const LImgs = {};
+    ['maid','chef','doctor','medic','baby',...FList.flatMap(f=>CList.map(c=>`player_${f}_${c}`))]
+    .forEach(r => { LImgs[r] = {}; if(r==='baby') { let i=new Image(); i.src=URL.createObjectURL(new Blob([createCharacterSVG('baby', 'normal')],{type:'image/svg+xml'})); LImgs[r]['normal']=i; } else { ['normal','happy','shocked','angry'].forEach(e => { let i=new Image(); i.src=URL.createObjectURL(new Blob([createCharacterSVG(r,e)],{type:'image/svg+xml'})); LImgs[r][e]=i; }); } });
+
     // --- 8. 遊戲迴圈與邏輯 ---
+    function rep(t) { return t?t.replace(/{playerName}/g,P.name).replace(/{residence}/g,P.residence):""; }
+
+    function save() { localStorage.setItem("BJS", JSON.stringify({d:day,P,Q:QPool,sn:selN,sf:selF,sc:selC,sb:selB})); fTexts.push(new FloatingText(400,200,"【進度已儲存】","#6ff")); SE.save(); }
+    function load() { let s=localStorage.getItem("BJS"); if(s){try{let d=JSON.parse(s); day=d.d; P=d.P; QPool=d.Q; selN=d.sn; selF=d.sf; selC=d.sc; selB=d.sb; isEarlyEnd=false; state=STATES.DAY_TRANSITION; SE.win(); return true;}catch(e){}} return false; }
+    function hasS() { return localStorage.getItem("BJS")!==null; }
+
     function gameLoop(ts) {
         time = ts / 1000; ctx.save();
         if(shake>0) { ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake); shake*=0.85; if(shake<0.5) shake=0; }
@@ -461,13 +546,12 @@
         if(state===STATES.START) {
             ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,800,900); 
             ctx.fillStyle='#f4ebd0'; ctx.font='bold 56px Kaiti'; ctx.textAlign='center'; ctx.shadowColor='#000'; ctx.shadowBlur=15; ctx.fillText("汴京娘子調養記",400,250); 
-            ctx.font='28px Kaiti'; ctx.fillText("— 終極衛教大作戰 (修復音效版) —",400,320); ctx.shadowBlur=0;
+            ctx.font='28px Kaiti'; ctx.fillText("— 終極衛教大作戰 (高畫質版) —",400,320); ctx.shadowBlur=0;
             drawBtn({x:300,y:450,w:200,h:60},"開始新局",true); if(hasS()) drawBtn({x:300,y:550,w:200,h:60},"延續前緣",true);
         } else if(state===STATES.CREATION) {
             ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillRect(0,0,800,900); 
             ctx.fillStyle='#ffdd66'; ctx.font='bold 40px Kaiti'; ctx.textAlign='center'; ctx.fillText("【主母設定】",400,150);
             
-            // 加入臉型與服飾選擇按鈕，使介面完整
             ctx.fillStyle='#f4ebd0'; ctx.font='28px Kaiti'; 
             ctx.fillText("名諱",200,300); drawBtn(UI.nL,"<",true); drawBtn(UI.nR,">",true); ctx.fillStyle='#cdae77'; ctx.font='32px Kaiti'; ctx.fillText(NList[selN],400,300);
             
@@ -516,11 +600,9 @@
                 drawBox("【情境發展】", rep(fbText)); 
             }
         } else if(state===STATES.END_ANIM) {
-            let sc=endScenes[endIdx];
-            let cN=sc.role==='baby'?'內心獨白':(P.aff[sc.role]?P.aff[sc.role].n:"未知");
-            let img = sc.role;
-            if(img === 'player') img = P.id;
-            drawChar(img, cN, sc.expr, Math.sin(time*3)*5);
+            let sc=endScenes[endIdx], bY=Math.sin(time*3)*5, cN=sc.role==='baby'?'內心獨白':(P.aff[sc.role]?P.aff[sc.role].n:"未知");
+            let img = sc.role; if(img === 'player') img = P.id;
+            drawChar(img, cN, sc.expr, bY);
             drawBox(sc.n, sc.t);
         } else if(state===STATES.END) {
             let og=ctx.createLinearGradient(0,0,0,900); og.addColorStop(0,'rgba(0,0,0,0.55)'); og.addColorStop(0.5,'rgba(0,0,0,0.75)'); og.addColorStop(1,'rgba(0,0,0,0.95)'); ctx.fillStyle=og; ctx.fillRect(0,0,800,900);
